@@ -5,6 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import FarmerHome from '../pages/FarmerPages/FarmerHome'; // Correct for "export default"
 import BuyerHome from '../pages/BuyerPages/BuyerHome';
 
+import AppMenu from '../pages/BasicAppPages/AppMenu';
+import Stocks from '../pages/FarmerPages/Stocks';
+import Orders from '../pages/FarmerPages/Orders';
+import FarmerHistory from '../pages/FarmerPages/FarmerHistory';
+
 const Tab = createBottomTabNavigator();
 const K_GREEN = '#6aaa49';
 
@@ -28,10 +33,10 @@ export function FarmerTabs() {
       })}
     >
       <Tab.Screen name="Home" component={FarmerHome} />
-      <Tab.Screen name="Stock" component={FarmerHome} />
-      <Tab.Screen name="Orders" component={FarmerHome} />
-      <Tab.Screen name="History" component={FarmerHome} />
-      <Tab.Screen name="Menu" component={FarmerHome} />
+      <Tab.Screen name="Stock" component={Stocks} />
+      <Tab.Screen name="Orders" component={Orders} />
+      <Tab.Screen name="History" component={FarmerHistory} />
+      <Tab.Screen name="Menu" component={AppMenu} />
     </Tab.Navigator>
   );
 }

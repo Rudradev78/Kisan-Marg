@@ -3,19 +3,19 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// 1. IMPORT YOUR PAGES (Make sure filenames match exactly)
+/* --- NAVIGATION IMPORTS --- */
+import { FarmerTabs, BuyerTabs } from './navigation/AppNavigator';
+
+/* --- BASIC APP PAGES IMPORTS --- */
 import RoleSelection from './pages/BasicAppPages/RoleSelection';
-// Create these empty files in their folders if you haven't yet:
-// import FarmerHome from './pages/FarmerPages/FarmerHome';
-// import BuyerHome from './pages/BuyerPages/BuyerHome';
+import FarmerSignIn from './pages/BasicAppPages/FarmerSignIn';
+import FarmerSignUp from './pages/BasicAppPages/FarmerSignUp';
+import BuyerSignIn from './pages/BasicAppPages/BuyerSignIn';
+import BuyerSignUp from './pages/BasicAppPages/BuyerSignUp';
 
 const Stack = createNativeStackNavigator();
-
-// Temporary Placeholder for Home Screens until you build them
-const PlaceholderHome = ({ route }) => (
-  <View style={styles.center}><Text>Welcome {route.name}!</Text></View>
-);
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -24,14 +24,18 @@ export default function App() {
   useEffect(() => {
     const checkUserStatus = async () => {
       try {
-        /*const onboardingComplete = await AsyncStorage.getItem('@onboarding_complete');
+        /* --- ALGORITHM TURNED OFF FOR TESTING ---
+        const onboardingComplete = await AsyncStorage.getItem('@onboarding_complete');
         const userRole = await AsyncStorage.getItem('@user_role');
 
         if (onboardingComplete === 'true') {
-          // If they already picked a role, send them to their specific home
           setInitialRoute(userRole === 'Farmer' ? 'FarmerHome' : 'BuyerHome');
-        }*/
-       setInitialRoute('RoleSelection');
+        }
+        ------------------------------------------ */
+        
+        // STAY ON ROLE SELECTION DURING UI DESIGN
+        setInitialRoute('RoleSelection');
+
       } catch (e) {
         console.log("Error reading storage", e);
       } finally {
@@ -51,22 +55,56 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName={initialRoute}>
-        {/* Basic App Pages */}
-        <Stack.Screen 
-          name="RoleSelection" 
-          component={RoleSelection} 
-          options={{ headerShown: false }} 
-        />
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName={initialRoute}>
+          
+          {/* 1. ENTRY & ROLE SELECTION */}
+          <Stack.Screen 
+            name="RoleSelection" 
+            component={RoleSelection} 
+            options={{ headerShown: false }} 
+          />
 
-        {/* Farmer Branch */}
-        <Stack.Screen name="FarmerHome" component={PlaceholderHome} options={{ title: 'Farmer Dashboard' }} />
+          {/* 2. FARMER AUTH PAGES */}
+          <Stack.Screen 
+            name="FarmerSignIn" 
+            component={FarmerSignIn} 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="FarmerSignUp" 
+            component={FarmerSignUp} 
+            options={{ headerShown: false }} 
+          />
 
-        {/* Buyer Branch */}
-        <Stack.Screen name="BuyerHome" component={PlaceholderHome} options={{ title: 'Kisan Marg Market' }} />
-      </Stack.Navigator>
-    </NavigationContainer>
+          {/* 3. BUYER AUTH PAGES */}
+          <Stack.Screen 
+            name="BuyerSignIn" 
+            component={BuyerSignIn} 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="BuyerSignUp" 
+            component={BuyerSignUp} 
+            options={{ headerShown: false }} 
+          />
+
+          {/* 4. MAIN DASHBOARDS (TAB NAVIGATORS) */}
+          <Stack.Screen 
+            name="FarmerHome" 
+            component={FarmerTabs} 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="BuyerHome" 
+            component={BuyerTabs} 
+            options={{ headerShown: false }} 
+          />
+
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 
@@ -77,9 +115,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
   },
-  center: {
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center'
-  }
 });

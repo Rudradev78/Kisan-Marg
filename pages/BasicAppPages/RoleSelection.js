@@ -33,9 +33,9 @@ export default function RoleSelection({ navigation }) {
 
       // Navigate to the correct home screen based on role
       if (selectedRole === 'Farmer') {
-        navigation.replace('FarmerHome');
+        navigation.replace('FarmerSignIn');
       } else {
-        navigation.replace('BuyerHome');
+        navigation.replace('BuyerSignIn');
       }
 
     } catch (e) {

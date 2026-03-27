@@ -2,10 +2,17 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
-import FarmerHome from '../pages/FarmerPages/FarmerHome'; // Correct for "export default"
-import BuyerHome from '../pages/BuyerPages/BuyerHome';
-
+// --- SHARED / COMMON PAGES ---
 import AppMenu from '../pages/BasicAppPages/AppMenu';
+
+// --- BUYER PAGES ---
+import BuyerHome from '../pages/BuyerPages/BuyerHome';
+import BuyerSearch from '../pages/BuyerPages/BuyerSearch';
+import Kart from '../pages/BuyerPages/Kart';
+import BuyerOrders from '../pages/BuyerPages/BuyerOrders';
+
+// --- FARMER PAGES ---
+import FarmerHome from '../pages/FarmerPages/FarmerHome';
 import Stocks from '../pages/FarmerPages/Stocks';
 import Orders from '../pages/FarmerPages/Orders';
 import FarmerHistory from '../pages/FarmerPages/FarmerHistory';
@@ -36,7 +43,11 @@ export function FarmerTabs() {
       <Tab.Screen name="Stock" component={Stocks} />
       <Tab.Screen name="Orders" component={Orders} />
       <Tab.Screen name="History" component={FarmerHistory} />
-      <Tab.Screen name="Menu" component={AppMenu} />
+      <Tab.Screen 
+        name="Menu" 
+        component={AppMenu} 
+        initialParams={{ userRole: 'farmer' }} // 🟢 Fixes the role in AppMenu
+      />
     </Tab.Navigator>
   );
 }
@@ -61,10 +72,14 @@ export function BuyerTabs() {
       })}
     >
       <Tab.Screen name="Home" component={BuyerHome} />
-      <Tab.Screen name="Search" component={BuyerHome} />
-      <Tab.Screen name="Kart" component={BuyerHome} />
-      <Tab.Screen name="Orders" component={BuyerHome} />
-      <Tab.Screen name="Menu" component={BuyerHome} />
+      <Tab.Screen name="Search" component={BuyerSearch} />
+      <Tab.Screen name="Kart" component={Kart} />
+      <Tab.Screen name="Orders" component={BuyerOrders} />
+      <Tab.Screen 
+        name="Menu" 
+        component={AppMenu} 
+        initialParams={{ userRole: 'buyer' }} // 🟢 Fixes the role in AppMenu
+      />
     </Tab.Navigator>
   );
 }

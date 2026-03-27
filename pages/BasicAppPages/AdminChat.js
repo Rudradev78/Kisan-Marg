@@ -101,7 +101,7 @@ export default function AdminChat({ navigation }) {
       <KeyboardAvoidingView 
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 120} 
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} 
       >
         <FlatList
           ref={flatListRef}
@@ -225,7 +225,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', 
     paddingHorizontal: 12,
-    paddingVertical: 10, 
+    paddingVertical: 10,
+    marginTop: 0, 
     backgroundColor: '#fff', 
     borderTopWidth: 1, 
     borderTopColor: '#f0f0f0' 

@@ -19,15 +19,33 @@ import Language from './pages/BasicAppPages/Language';
 import AboutApp from './pages/BasicAppPages/AboutApp'; 
 import HelpContact from './pages/BasicAppPages/HelpContact';
 import AdminChat from './pages/BasicAppPages/AdminChat'; 
+import PrivacyPolicy from './pages/BasicAppPages/PrivacyPolicy'; 
 
 /* --- FARMER PAGES IMPORTS --- */
 import UploadProduct from './pages/FarmerPages/UploadProduct';
 import Stocks from './pages/FarmerPages/Stocks';
 import Orders from './pages/FarmerPages/Orders';
 import FarmerHistory from './pages/FarmerPages/FarmerHistory';
-import FarmerAlertNotificaion from './pages/FarmerPages/FarmerAlertNotificaion';
+import FarmerAlertNotification from './pages/FarmerPages/FarmerAlertNotification';
 import FarmerSearch from './pages/FarmerPages/FarmerSearch'; 
-import FarmerProfile from './pages/FarmerPages/FarmerProfile'; // <--- NEW
+import FarmerProfile from './pages/FarmerPages/FarmerProfile';
+
+/* --- BUYER PAGES IMPORTS --- */
+import ProductDetails from './pages/BuyerPages/ProductDetails';
+import Kart from './pages/BuyerPages/Kart';
+import BuyerOrders from './pages/BuyerPages/BuyerOrders';
+import OrderDetails from './pages/BuyerPages/OrderDetails';
+import BuyerAlertNotification from './pages/BuyerPages/BuyerAlertNotification';
+import BuyerSearch from './pages/BuyerPages/BuyerSearch'; 
+import BuyerProfile from './pages/BuyerPages/BuyerProfile'; 
+import PlaceOrder from './pages/BuyerPages/PlaceOrder';
+import Payment from './pages/BuyerPages/Payment';
+import OrderSuccess from './pages/BuyerPages/OrderSuccess';
+import Wishlist from './pages/BuyerPages/Wishlist';
+import SavedAddresses from './pages/BuyerPages/SavedAddresses';
+import PersonalInfo from './pages/BuyerPages/PersonalInfo';
+import PaymentsRefunds from './pages/BuyerPages/PaymentsRefunds';
+
 
 const Stack = createNativeStackNavigator();
 
@@ -38,6 +56,7 @@ export default function App() {
   useEffect(() => {
     const checkUserStatus = async () => {
       try {
+        // Logic for checking login tokens would go here later
         setInitialRoute('RoleSelection');
       } catch (e) {
         console.log("Error reading storage", e);
@@ -77,7 +96,7 @@ export default function App() {
           <Stack.Screen name="BuyerSignIn" component={BuyerSignIn} />
           <Stack.Screen name="BuyerSignUp" component={BuyerSignUp} />
 
-          {/* --- 3. MAIN DASHBOARDS --- */}
+          {/* --- 3. MAIN DASHBOARDS (TABS) --- */}
           <Stack.Screen name="FarmerHome" component={FarmerTabs} />
           <Stack.Screen name="BuyerHome" component={BuyerTabs} />
 
@@ -86,16 +105,33 @@ export default function App() {
           <Stack.Screen name="Stocks" component={Stocks} />
           <Stack.Screen name="Orders" component={Orders} />
           <Stack.Screen name="FarmerHistory" component={FarmerHistory} />
-          <Stack.Screen name="FarmerAlertNotificaion" component={FarmerAlertNotificaion} />
-          <Stack.Screen name="Search" component={FarmerSearch} /> 
+          <Stack.Screen name="FarmerAlertNotification" component={FarmerAlertNotification} />
+          <Stack.Screen name="FarmerSearch" component={FarmerSearch} /> 
           <Stack.Screen name="FarmerProfile" component={FarmerProfile} /> 
+          
+          {/* --- 5. BUYER ACTION PAGES --- */}
+          <Stack.Screen name="Kart" component={Kart} />
+          <Stack.Screen name="ProductDetails" component={ProductDetails} />
+          <Stack.Screen name="BuyerOrders" component={BuyerOrders} />
+          <Stack.Screen name="OrderDetails" component={OrderDetails} />
+          <Stack.Screen name="BuyerAlertNotification" component={BuyerAlertNotification} />
+          <Stack.Screen name="BuyerSearch" component={BuyerSearch} /> 
+          <Stack.Screen name="BuyerProfile" component={BuyerProfile} /> 
+          <Stack.Screen name="PlaceOrder" component={PlaceOrder} />
+          <Stack.Screen name="Payment" component={Payment} />
+          <Stack.Screen name="OrderSuccess" component={OrderSuccess} />
+          <Stack.Screen name="Wishlist" component={Wishlist} />
+          <Stack.Screen name="SavedAddresses" component={SavedAddresses} />
+          <Stack.Screen name="PersonalInfo" component={PersonalInfo} />
+          <Stack.Screen name="PaymentsRefunds" component={PaymentsRefunds} />
 
-          {/* --- 5. UTILITY & MENU --- */}
+          {/* --- 6. UTILITY & MENU --- */}
           <Stack.Screen name="AppMenu" component={AppMenu} />
           <Stack.Screen name="Language" component={Language} />
           <Stack.Screen name="AboutApp" component={AboutApp} />
           <Stack.Screen name="HelpContact" component={HelpContact} />
           <Stack.Screen name="AdminChat" component={AdminChat} />
+          <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicy} />
 
         </Stack.Navigator>
       </NavigationContainer>

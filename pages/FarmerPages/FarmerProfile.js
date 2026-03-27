@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import { 
-  StyleSheet, Text, View, ScrollView, TouchableOpacity, 
-  Image, TextInput, Alert, KeyboardAvoidingView, Platform 
+  StyleSheet, 
+  Text, 
+  View, 
+  ScrollView, 
+  TouchableOpacity, 
+  Image, 
+  TextInput, 
+  Alert, 
+  StatusBar 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -15,6 +22,7 @@ export default function FarmerProfile({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={K_DARK_BLUE} />
@@ -107,8 +115,25 @@ export default function FarmerProfile({ navigation }) {
             <Text style={styles.valueText}>+91 98765 43210 (Verified)</Text>
           </View>
         </View>
+
+        {/* 🟢 5. LEGAL & SECURITY (NEW SECTION) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Legal & Security</Text>
+          <TouchableOpacity 
+            style={styles.legalBtn} 
+            onPress={() => navigation.navigate('PrivacyPolicy', { userRole: 'farmer' })}
+          >
+            <View style={styles.legalIconBox}>
+                <Ionicons name="shield-checkmark-outline" size={20} color={K_GREEN} />
+            </View>
+            <Text style={styles.legalText}>Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={18} color="#ccc" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.versionText}>Kisan Marg v1.0.4</Text>
         
         <View style={{ height: 40 }} />
+        
       </ScrollView>
     </SafeAreaView>
   );
@@ -135,12 +160,34 @@ const styles = StyleSheet.create({
   inputGroup: { marginBottom: 20 },
   label: { fontSize: 12, color: '#aaa', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
   input: { backgroundColor: '#f6f6f6', borderRadius: 12, padding: 15, fontSize: 15, color: K_DARK_BLUE },
-  locationBtn: { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 12, borderWeight: 1, borderColor: K_GREEN, borderStyle: 'dashed', borderWidth: 1 },
+  locationBtn: { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 12, borderWidth: 1, borderColor: K_GREEN, borderStyle: 'dashed' },
   locationBtnText: { color: K_GREEN, marginLeft: 10, fontWeight: '600' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 15 },
   chip: { backgroundColor: '#f0f9eb', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, marginRight: 10, marginBottom: 10 },
   chipText: { color: K_GREEN, fontSize: 13, fontWeight: '600' },
   methodRow: { flexDirection: 'row' },
   methodBtn: { flex: 1, padding: 12, alignItems: 'center', borderRadius: 10, backgroundColor: '#f6f6f6', marginRight: 10 },
-  valueText: { fontSize: 16, color: K_DARK_BLUE, fontWeight: '500' }
+  valueText: { fontSize: 16, color: K_DARK_BLUE, fontWeight: '500' },
+
+  // NEW STYLES
+  legalBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#fff', 
+    padding: 15, 
+    borderRadius: 15, 
+    borderWidth: 1, 
+    borderColor: '#f0f0f0' 
+  },
+  legalIconBox: { 
+    width: 36, 
+    height: 36, 
+    borderRadius: 10, 
+    backgroundColor: '#f0f9eb', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 15 
+  },
+  legalText: { flex: 1, fontSize: 15, fontWeight: '600', color: K_DARK_BLUE },
+  versionText: { textAlign: 'center', color: '#ccc', fontSize: 10, marginBottom: 30 }
 });

@@ -8,7 +8,8 @@ import {
   TouchableOpacity, 
   Dimensions,
   ImageBackground,
-  FlatList
+  FlatList,
+  StatusBar
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -83,7 +84,6 @@ export default function FarmerHome({ navigation }) {
     setNewsIndex(index);
   };
 
-  // Helper component to render the Adjusted Headings
   const SectionHeader = ({ title, showSeeAll = false }) => (
     <View style={styles.sectionHeaderContainer}>
       <View style={styles.titleWithUnderline}>
@@ -100,8 +100,10 @@ export default function FarmerHome({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* --- 1. TOP GRADIENT HEADER --- */}
-      <LinearGradient colors={[K_GREEN, 'rgba(106, 170, 73, 0.8)', 'transparent']} style={styles.topGradient}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+      {/* --- 1. TOP STICKY HEADER (Branding & Notif only) --- */}
+      <LinearGradient colors={[K_GREEN, 'rgba(106, 170, 73, 0.9)', 'transparent']} style={styles.topGradient}>
         <SafeAreaView edges={['top']}>
           <View style={styles.header}>
             <View style={styles.logoRow}>
@@ -110,8 +112,12 @@ export default function FarmerHome({ navigation }) {
                 <Text style={styles.appName}>Kisan Marg</Text>
                 <Text style={styles.slogan}>A Direct Path from Farm to Market</Text>
               </View>
-              <TouchableOpacity style={styles.searchBtn} onPress={() => navigation.navigate('Search')}>
-                <Ionicons name="search" size={22} color={K_GREEN} />
+              <TouchableOpacity 
+                style={styles.notifBtn} 
+                onPress={() => navigation.navigate('FarmerAlertNotification')}
+              >
+                <Ionicons name="notifications-outline" size={24} color={K_GREEN} />
+                <View style={styles.notifDot} />
               </TouchableOpacity>
             </View>
           </View>
@@ -119,9 +125,20 @@ export default function FarmerHome({ navigation }) {
       </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={{ height: 100 }} />
+        {/* Spacer for sticky header */}
+        <View style={{ height: 80 }} />
 
-        {/* --- 2. DYNAMIC WELCOME SECTION --- */}
+        {/* 🟢 2. SEARCH BAR INSIDE SCROLL (Will hide on scroll) */}
+        <TouchableOpacity 
+          style={styles.searchBarContainer} 
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('FarmerSearch')}
+        >
+          <Ionicons name="search" size={20} color="#999" />
+          <Text style={styles.searchPlaceholder}>Search crops, markets or news...</Text>
+        </TouchableOpacity>
+
+        {/* --- 3. DYNAMIC WELCOME SECTION --- */}
         <View style={styles.welcomeWrapper}>
           <ImageBackground source={dashboardData[currentIdx].img} style={styles.dynamicBg}>
             <LinearGradient colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.7)']} style={styles.innerGradient} />
@@ -138,14 +155,14 @@ export default function FarmerHome({ navigation }) {
           </ImageBackground>
         </View>
 
-        {/* --- 3. STATS SECTION --- */}
+        {/* --- 4. STATS SECTION --- */}
         <View style={styles.statsContainer}>
           <View style={styles.statBox}><Text style={styles.statVal}>50</Text><Text style={styles.statLabel}>Total Order</Text></View>
           <View style={[styles.statBox, styles.statBorder]}><Text style={styles.statVal}>4.8 ★</Text><Text style={styles.statLabel}>Ratings</Text></View>
           <View style={styles.statBox}><Text style={styles.statVal}>₹25k</Text><Text style={styles.statLabel}>Total Profit</Text></View>
         </View>
 
-        {/* --- 4. ACTION GRID --- */}
+        {/* --- 5. ACTION GRID --- */}
         <View style={styles.actionGrid}>
           {[
             { label: 'Upload', icon: 'cloud-upload-outline', color: '#e8f5e9', target: 'UploadProduct' },
@@ -162,7 +179,7 @@ export default function FarmerHome({ navigation }) {
           ))}
         </View>
 
-        {/* --- 5. ONGOING ORDERS (Adjusted Heading) --- */}
+        {/* --- 6. ONGOING ORDERS --- */}
         <SectionHeader title="Ongoing Orders" showSeeAll={true} />
 
         <View style={styles.orderCard}>
@@ -193,7 +210,7 @@ export default function FarmerHome({ navigation }) {
           </View>
         </View>
 
-        {/* --- 6. AGRICULTURAL NEWS (Adjusted Heading) --- */}
+        {/* --- 7. AGRICULTURAL NEWS --- */}
         <SectionHeader title="Agricultural News" />
         
         <FlatList
@@ -202,9 +219,9 @@ export default function FarmerHome({ navigation }) {
           horizontal
           showsHorizontalScrollIndicator={false}
           snapToInterval={width - 20}
+          paddingHorizontal={10}
           decelerationRate="fast"
           onMomentumScrollEnd={onNewsScrollEnd}
-          contentContainerStyle={styles.newsSlider}
           renderItem={({ item }) => (
             <TouchableOpacity activeOpacity={0.9}>
               <ImageBackground source={{ uri: item.image }} style={styles.newsCard} imageStyle={{ borderRadius: 20 }}>
@@ -215,7 +232,7 @@ export default function FarmerHome({ navigation }) {
           )}
         />
 
-        {/* --- 7. MARKET PRICES TODAY (Adjusted Heading) --- */}
+        {/* --- 8. MARKET PRICES TODAY --- */}
         <SectionHeader title="Market Prices Today" />
         
         <View style={styles.marketList}>
@@ -254,16 +271,40 @@ export default function FarmerHome({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fcfcfc' },
   scrollContent: { paddingBottom: 100 },
-  topGradient: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingBottom: 50 },
+  
+  // Adjusted Top Gradient for smaller height
+  topGradient: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingBottom: 15 },
   header: { paddingHorizontal: 20, paddingTop: 5 },
   logoRow: { flexDirection: 'row', alignItems: 'center' },
   miniLogo: { width: 50, height: 50 },
   brandInfo: { marginLeft: 10, flex: 1 },
   appName: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
   slogan: { fontSize: 10, color: '#f0f0f0', fontWeight: '500' },
-  searchBtn: { padding: 10, backgroundColor: '#fff', borderRadius: 12, elevation: 3 },
+  
+  notifBtn: { padding: 10, backgroundColor: '#fff', borderRadius: 12, elevation: 3, position: 'relative' },
+  notifDot: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: '#e74c3c', borderWidth: 1.5, borderColor: '#fff' },
 
-  welcomeWrapper: { marginHorizontal: 0, height: 250, marginBottom: 25, elevation: 8, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6 },
+  // Search Bar Container - Now inside the ScrollView flow
+  searchBarContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#fff', 
+    marginHorizontal: 20,
+    marginBottom: 20,
+    marginTop: 30,
+    height: 52, 
+    borderRadius: 15, 
+    paddingHorizontal: 15, 
+    elevation: 8, 
+    shadowColor: '#000', 
+    shadowOpacity: 0.1, 
+    shadowRadius: 10,
+    borderWidth: 1,
+    borderColor: '#f0f0f0'
+  },
+  searchPlaceholder: { marginLeft: 10, color: '#999', fontSize: 14, fontWeight: '500' },
+
+  welcomeWrapper: { marginHorizontal: 20, height: 230, borderRadius: 25, overflow: 'hidden', marginBottom: 25, elevation: 8 },
   dynamicBg: { width: '100%', height: '100%', justifyContent: 'flex-end' },
   innerGradient: { ...StyleSheet.absoluteFillObject },
   welcomeContent: { padding: 20, zIndex: 2 },
@@ -283,38 +324,12 @@ const styles = StyleSheet.create({
   actionIcon: { padding: 15, borderRadius: 20, marginBottom: 8, elevation: 2 },
   actionLabel: { fontSize: 12, fontWeight: '700', color: K_DARK_BLUE },
 
-  // --- ADJUSTED HEADING STYLES ---
-  sectionHeaderContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginHorizontal: 20,
-    marginTop: 40,
-    marginBottom: 15
-  },
-  titleWithUnderline: {
-    alignSelf: 'flex-start'
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: K_DARK_BLUE,
-    letterSpacing: 0.5
-  },
-  headerUnderline: {
-    width: 40,
-    height: 4,
-    backgroundColor: K_GREEN,
-    borderRadius: 2,
-    marginTop: 2
-  },
-  seeAllText: {
-    fontSize: 13,
-    color: K_GREEN,
-    fontWeight: '800'
-  },
+  sectionHeaderContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 20, marginTop: 40, marginBottom: 15 },
+  titleWithUnderline: { alignSelf: 'flex-start' },
+  sectionTitle: { fontSize: 22, fontWeight: '900', color: K_DARK_BLUE, letterSpacing: 0.5 },
+  headerUnderline: { width: 40, height: 4, backgroundColor: K_GREEN, borderRadius: 2, marginTop: 2 },
+  seeAllText: { fontSize: 13, color: K_GREEN, fontWeight: '800' },
 
-  // Ongoing Orders Section
   orderCard: { flexDirection: 'row', backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 20, elevation: 4, overflow: 'hidden', marginBottom: 15 },
   imageContainer: { width: '35%', height: 160 },
   newProductImg: { width: '100%', height: '100%', resizeMode: 'cover' },
@@ -336,21 +351,12 @@ const styles = StyleSheet.create({
   acceptOrderBtn: { backgroundColor: K_GREEN, paddingVertical: 8, paddingHorizontal: 15, borderRadius: 10 },
   btnTextNew: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
 
-  newsSlider: { paddingHorizontal: 10 },
   newsCard: { width: width - 40, height: 250, marginHorizontal: 10, justifyContent: 'flex-end', padding: 18, elevation: 4 },
   newsOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 20 },
   newsText: { color: '#fff', fontWeight: '700', fontSize: 15, lineHeight: 22, zIndex: 2 },
 
   marketList: { paddingHorizontal: 20, marginBottom: 20 },
-  marketPriceCard: { 
-    flexDirection: 'row', 
-    backgroundColor: '#fff', 
-    padding: 12, 
-    borderRadius: 18, 
-    alignItems: 'center', 
-    marginBottom: 12,
-    elevation: 3
-  },
+  marketPriceCard: { flexDirection: 'row', backgroundColor: '#fff', padding: 12, borderRadius: 18, alignItems: 'center', marginBottom: 12, elevation: 3 },
   marketCropImg: { width: 55, height: 55, borderRadius: 12 },
   marketCropInfo: { flex: 1, marginLeft: 15 },
   marketCropName: { fontSize: 16, fontWeight: 'bold', color: K_DARK_BLUE },

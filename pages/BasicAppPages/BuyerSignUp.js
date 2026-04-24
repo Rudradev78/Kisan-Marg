@@ -3,21 +3,24 @@ import {
   StyleSheet, 
   Text, 
   View, 
-  Image,
+  Image, 
   TextInput, 
   TouchableOpacity, 
-  Dimensions,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform
+  Dimensions, 
+  ScrollView, 
+  KeyboardAvoidingView, 
+  Platform, 
+  ActivityIndicator, 
+  Alert 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient from '../../services/api';
 
 const { width, height } = Dimensions.get('window');
 
-// IMAGE ASSET PATHS
 const VEGETABLE_IMAGE = require('../../assets/Buyer2.png');
 const LOGO_WREATH = require('../../assets/App-logo.png');
 
@@ -25,13 +28,90 @@ const B_ORANGE = '#FF5733';
 const K_DARK_BLUE = '#112244';
 
 export default function BuyerSignUp({ navigation }) {
+  const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSignUp = () => {
-    if (phone.length === 10) {
-      navigation.replace('BuyerHome');
-    } else {
-      alert("Please enter a valid 10-digit number");
+  /**
+   * STEP 1: INITIALIZE SIGNUP
+   * Checks if a Buyer already exists and triggers the OTP.
+   */
+  const handleSendOTP = async () => {
+    // Client-side Validation
+    if (name.trim().length < 2) {
+      Alert.alert("Input Error", "Please enter a valid name.");
+      return;
+    }
+    if (phone.length !== 10) {
+      Alert.alert("Input Error", "Please enter a valid 10-digit mobile number.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await apiClient.post('/auth/login', {
+        phno: phone,
+        name: name,
+        userType: 'Buyer' 
+      });
+
+      if (response.data.success) {
+        setIsOtpSent(true);
+        Alert.alert("OTP Sent", "Verification code sent! Check your SMS or server logs.");
+      }
+    } catch (error) {
+      if (error.response && error.response.status === 400) {
+        // Backend returns 400 if 'isLogged' is already true for this Buyer
+        Alert.alert("Account Exists", "This number is already a registered Buyer. Please Log In.");
+      } else {
+        Alert.alert("Error", "Could not send OTP. Please check your connection.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * STEP 2: VERIFY AND FINALIZE
+   * Verifies OTP. If successful, backend sets isLogged to true.
+   */
+  const handleVerifyOTP = async () => {
+    if (otp.length !== 6) {
+      Alert.alert("Invalid OTP", "Please enter the 6-digit verification code.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await apiClient.post('/auth/verify', {
+        phno: phone,
+        otp: otp,
+        userType: 'Buyer'
+      });
+
+      if (response.data.success) {
+        // Store Session Locally
+        await AsyncStorage.setItem('userToken', response.data.token);
+        await AsyncStorage.setItem('userType', 'Buyer');
+        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+
+        Alert.alert("Welcome!", "Your Buyer account is now active.");
+        navigation.replace('BuyerHome'); 
+      }
+    } catch (error) {
+      const msg = error.response?.data?.message || "Invalid OTP";
+
+      if (error.response?.status === 403) {
+        // 5-chance lockout rule
+        Alert.alert("Account Locked", "Too many failed attempts. Please try again later.");
+        navigation.replace('RoleSelection'); 
+      } else {
+        Alert.alert("Failed", msg);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -41,67 +121,104 @@ export default function BuyerSignUp({ navigation }) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
         style={{flex: 1}}
       >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent} 
-          bounces={false} 
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.scrollContent} bounces={false} showsVerticalScrollIndicator={false}>
           
-          {/* TOP SECTION: IMMERSIVE APP-THEMED IMAGE */}
           <View style={styles.headerContainer}>
             <Image source={VEGETABLE_IMAGE} style={styles.headerImage} />
-            <LinearGradient 
-              colors={['transparent', 'rgba(0,0,0,0.4)', B_ORANGE]} 
-              style={styles.gradientOverlay} 
-            />
+            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.4)', B_ORANGE]} style={styles.gradientOverlay} />
             <View style={styles.centeredLogoContainer}>
                <Image source={LOGO_WREATH} style={styles.largeLogo} resizeMode="contain" />
             </View>
           </View>
 
-          {/* BOTTOM SECTION: WHITE CARD WITH FORM */}
           <View style={styles.contentCard}>
-            
-            {/* TITLE ROW WITH INLINE CHANGE ROLE BUTTON */}
             <View style={styles.titleRow}>
               <View style={{flex: 1}}>
                 <Text style={styles.title}>Buyer Sign Up</Text>
-                <Text style={styles.subtitle}>Start shopping direct from farms.</Text>
+                <Text style={styles.subtitle}>
+                  {isOtpSent ? "Enter verification code" : "Direct farm-to-home shopping."}
+                </Text>
               </View>
-
-              <TouchableOpacity 
-                style={styles.inlineChangeRole} 
-                onPress={() => navigation.replace('RoleSelection')}
-              >
-                <Ionicons name="swap-horizontal" size={18} color={B_ORANGE} />
-                <Text style={styles.changeRoleBtnText}>Change Role</Text>
-              </TouchableOpacity>
+              
+              {!isOtpSent && (
+                <TouchableOpacity 
+                  style={styles.inlineChangeRole} 
+                  onPress={() => navigation.replace('RoleSelection')}
+                >
+                  <Ionicons name="swap-horizontal" size={18} color={B_ORANGE} />
+                  <Text style={styles.changeRoleBtnText}>Role</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.formContainer}>
-              <Text style={styles.label}>Mobile Number</Text>
+              <Text style={styles.label}>Full Name</Text>
               <TextInput 
-                style={styles.input} 
+                style={[styles.input, isOtpSent && styles.disabledInput]} 
+                placeholder="Enter your name" 
+                value={name} 
+                onChangeText={setName}
+                editable={!isOtpSent && !isLoading}
+                selectionColor={B_ORANGE}
+              />
+
+              <Text style={[styles.label, {marginTop: 20}]}>Mobile Number</Text>
+              <TextInput 
+                style={[styles.input, isOtpSent && styles.disabledInput]} 
                 placeholder="9876543210" 
                 keyboardType="phone-pad" 
                 maxLength={10} 
-                value={phone}
+                value={phone} 
                 onChangeText={setPhone}
+                editable={!isOtpSent && !isLoading}
                 selectionColor={B_ORANGE}
               />
+
+              {/* DYNAMIC OTP FIELD */}
+              {isOtpSent && (
+                <View style={{marginTop: 20}}>
+                  <Text style={styles.label}>6-Digit OTP</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="123456" 
+                    keyboardType="number-pad" 
+                    maxLength={6} 
+                    value={otp}
+                    onChangeText={setOtp}
+                    autoFocus={true}
+                    selectionColor={B_ORANGE}
+                  />
+                  <TouchableOpacity onPress={() => setIsOtpSent(false)} style={{marginTop: 12}}>
+                    <Text style={{color: B_ORANGE, fontSize: 13, fontWeight: '700'}}>Change Name/Number?</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
-            <TouchableOpacity style={styles.mainButton} onPress={handleSignUp}>
-              <Text style={styles.buttonText}>REGISTER NOW</Text>
+            <TouchableOpacity 
+              style={[styles.mainButton, isLoading && { opacity: 0.7 }]} 
+              onPress={isOtpSent ? handleVerifyOTP : handleSendOTP} 
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>
+                  {isOtpSent ? "VERIFY & REGISTER" : "SEND OTP"}
+                </Text>
+              )}
             </TouchableOpacity>
 
-            <View style={styles.footerLinks}>
-              <TouchableOpacity onPress={() => navigation.navigate('BuyerSignIn')}>
-                <Text style={styles.footerText}>
-                  Already have an account? <Text style={{fontWeight:'bold', color: B_ORANGE}}>Log In</Text>
-                </Text>
+            {!isOtpSent && (
+              <TouchableOpacity 
+                style={styles.footerLinkContainer} 
+                onPress={() => navigation.navigate('BuyerSignIn')}
+              >
+                 <Text style={styles.footerText}>
+                   Already have an account? <Text style={{fontWeight:'bold', color: B_ORANGE}}>Log In</Text>
+                 </Text>
               </TouchableOpacity>
-            </View>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -116,44 +233,31 @@ const styles = StyleSheet.create({
   headerImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   gradientOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   centeredLogoContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
-  largeLogo: { width: 200, height: 200 },
-  
-  contentCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
+  largeLogo: { width: 180, height: 180 },
+  contentCard: { 
+    flex: 1, 
+    backgroundColor: '#fff', 
+    borderTopLeftRadius: 40, 
+    borderTopRightRadius: 40, 
     paddingTop: 35, 
-    paddingHorizontal: 25,
-    marginTop: -30,
+    paddingHorizontal: 25, 
+    marginTop: -30, 
+    paddingBottom: 40 
   },
-  
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 25,
-  },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25, alignItems: 'center' },
   title: { fontSize: 26, fontWeight: 'bold', color: K_DARK_BLUE },
-  subtitle: { fontSize: 14, color: '#777', marginTop: 2 },
-  
-  inlineChangeRole: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  subtitle: { fontSize: 14, color: '#777' },
+  inlineChangeRole: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
     backgroundColor: '#fff5f2', 
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 8, 
+    paddingHorizontal: 12, 
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ffe8e3',
+    borderColor: '#ffe8e3'
   },
-  changeRoleBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: B_ORANGE,
-    marginLeft: 5,
-  },
-
+  changeRoleBtnText: { fontSize: 12, fontWeight: '700', color: B_ORANGE, marginLeft: 5 },
   formContainer: { marginBottom: 35 },
   label: { fontSize: 14, fontWeight: '600', color: K_DARK_BLUE, marginBottom: 8 },
   input: { 
@@ -164,6 +268,11 @@ const styles = StyleSheet.create({
     fontSize: 16, 
     color: K_DARK_BLUE, 
     backgroundColor: '#f9f9f9' 
+  },
+  disabledInput: {
+    backgroundColor: '#f2f2f2',
+    color: '#aaa',
+    borderColor: '#ddd'
   },
   mainButton: { 
     backgroundColor: K_DARK_BLUE, 
@@ -177,6 +286,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
-  footerLinks: { marginTop: 25, alignItems: 'center' },
+  footerLinkContainer: { marginTop: 25, alignItems: 'center' },
   footerText: { fontSize: 15, color: K_DARK_BLUE },
 });

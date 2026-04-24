@@ -12,9 +12,15 @@
       "backgroundColor": "#6aaa49"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rudradev.kisanmarg"
     },
     "android": {
+      "package": "com.rudradev.kisanmarg",
+      "permissions": [
+        "INTERNET"
+      ],
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#6aaa49"

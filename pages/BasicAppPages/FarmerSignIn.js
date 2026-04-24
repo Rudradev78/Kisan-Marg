@@ -9,11 +9,15 @@ import {
   Dimensions,
   ScrollView,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons'; // Using Expo icons
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient from '../../services/api'; 
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,13 +31,71 @@ export default function FarmerSignIn({ navigation }) {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [isOtpSent, setIsOtpSent] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // STEP 1: Request OTP from Backend
+  const requestOTP = async () => {
+    if (phone.length !== 10) {
+      Alert.alert("Invalid Number", "Please enter a 10-digit phone number.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await apiClient.post('/auth/login', {
+        phno: phone,
+        userType: 'Farmer' // Backend uses this to find the Farmer account
+      });
+
+      if (response.data.success) {
+        setIsOtpSent(true);
+        Alert.alert("Success", "OTP has been sent. Check your phone or server logs.");
+      }
+    } catch (error) {
+      const errorMsg = error.response?.data?.message || "No account found. Please Sign Up first.";
+      Alert.alert("Error", errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // STEP 2: Verify OTP and Save Session
+  const verifyOTP = async () => {
+    if (otp.length !== 6) {
+      Alert.alert("Invalid OTP", "Please enter the 6-digit code.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // CRITICAL FIX: We must pass userType here so backend can find the Farmer record
+      const response = await apiClient.post('/auth/verify', {
+        phno: phone,
+        otp: otp,
+        userType: 'Farmer' 
+      });
+
+      if (response.data.success) {
+        await AsyncStorage.setItem('userToken', response.data.token);
+        await AsyncStorage.setItem('userType', 'Farmer');
+        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+
+        // Navigate to Home
+        navigation.replace('FarmerHome');
+      }
+    } catch (error) {
+      const errorMsg = error.response?.data?.message || "Invalid OTP";
+      Alert.alert("Verification Failed", errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleAction = () => {
     if (!isOtpSent) {
-      if (phone.length === 10) setIsOtpSent(true);
-      else alert("Please enter a valid 10-digit number");
+      requestOTP();
     } else {
-      navigation.replace('FarmerHome'); 
+      verifyOTP();
     }
   };
 
@@ -45,7 +107,6 @@ export default function FarmerSignIn({ navigation }) {
       >
         <ScrollView contentContainerStyle={styles.scrollContent} bounces={false} showsVerticalScrollIndicator={false}>
           
-          {/* TOP SECTION: IMMERSIVE APP-THEMED IMAGE */}
           <View style={styles.headerContainer}>
             <Image source={VEGETABLE_IMAGE} style={styles.headerImage} />
             <LinearGradient colors={['transparent', 'rgba(0,0,0,0.4)', K_GREEN]} style={styles.gradientOverlay} />
@@ -54,14 +115,11 @@ export default function FarmerSignIn({ navigation }) {
             </View>
           </View>
 
-          {/* BOTTOM SECTION: WHITE CARD WITH FORM */}
           <View style={styles.contentCard}>
-            
-            {/* NEW: TITLE ROW WITH CHANGE ROLE BUTTON */}
             <View style={styles.titleRow}>
               <View>
                 <Text style={styles.title}>Farmer Sign In</Text>
-                <Text style={styles.subtitle}>Welcome back!</Text>
+                <Text style={styles.subtitle}>{isOtpSent ? "Verify Identity" : "Welcome back!"}</Text>
               </View>
 
               <TouchableOpacity 
@@ -69,7 +127,7 @@ export default function FarmerSignIn({ navigation }) {
                 onPress={() => navigation.replace('RoleSelection')}
               >
                 <Ionicons name="swap-horizontal" size={18} color={K_GREEN} />
-                <Text style={styles.changeRoleBtnText}>Change Role</Text>
+                <Text style={styles.changeRoleBtnText}>Role</Text>
               </TouchableOpacity>
             </View>
 
@@ -82,7 +140,8 @@ export default function FarmerSignIn({ navigation }) {
                 maxLength={10} 
                 value={phone}
                 onChangeText={setPhone}
-                editable={!isOtpSent}
+                editable={!isOtpSent && !isLoading}
+                selectionColor={K_GREEN}
               />
 
               {isOtpSent && (
@@ -93,16 +152,25 @@ export default function FarmerSignIn({ navigation }) {
                     placeholder="123456" 
                     keyboardType="number-pad" 
                     maxLength={6} 
-                    secureTextEntry 
                     value={otp}
                     onChangeText={setOtp}
+                    editable={!isLoading}
+                    selectionColor={K_GREEN}
                   />
                 </View>
               )}
             </View>
 
-            <TouchableOpacity style={styles.mainButton} onPress={handleAction}>
-              <Text style={styles.buttonText}>{isOtpSent ? "SIGN IN" : "SEND OTP"}</Text>
+            <TouchableOpacity 
+              style={[styles.mainButton, isLoading && { opacity: 0.7 }]} 
+              onPress={handleAction}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>{isOtpSent ? "VERIFY & LOGIN" : "SEND OTP"}</Text>
+              )}
             </TouchableOpacity>
 
             <View style={styles.footerLinks}>
@@ -124,8 +192,7 @@ const styles = StyleSheet.create({
   headerImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   gradientOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   centeredLogoContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
-  largeLogo: { width: 200, height: 200 },
-  
+  largeLogo: { width: 180, height: 180 },
   contentCard: {
     flex: 1,
     backgroundColor: '#fff',
@@ -134,35 +201,13 @@ const styles = StyleSheet.create({
     paddingTop: 35, 
     paddingHorizontal: 25,
     marginTop: -30,
+    paddingBottom: 30
   },
-  
-  // NEW STYLES FOR THE TITLE ROW
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 25,
-  },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 25 },
   title: { fontSize: 26, fontWeight: 'bold', color: K_DARK_BLUE },
   subtitle: { fontSize: 14, color: '#777', marginTop: 2 },
-  
-  inlineChangeRole: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0f9eb', // Light green tint
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e0f2d8',
-  },
-  changeRoleBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: K_GREEN,
-    marginLeft: 5,
-  },
-
+  inlineChangeRole: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f9eb', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: '#e0f2d8' },
+  changeRoleBtnText: { fontSize: 12, fontWeight: '700', color: K_GREEN, marginLeft: 5 },
   formContainer: { marginBottom: 30 },
   label: { fontSize: 14, fontWeight: '600', color: K_DARK_BLUE, marginBottom: 8 },
   input: { borderWidth: 1, borderColor: '#eee', borderRadius: 12, padding: 15, fontSize: 16, color: K_DARK_BLUE, backgroundColor: '#f9f9f9' },

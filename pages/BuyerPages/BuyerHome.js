@@ -240,7 +240,13 @@ export default function BuyerHome({ navigation }) {
       {cart.length > 0 && (
         <TouchableOpacity style={styles.floatingCart} onPress={() => navigation.navigate('Kart')}>
           <LinearGradient colors={[K_DARK_BLUE, '#1c3a6e']} style={styles.floatingContent}>
-            <Text style={styles.floatingTitle}>{cart.length} Item Added</Text>
+            <View style={styles.cartInfo}>
+              <View style={styles.cartIconCircle}>
+                <Ionicons name="cart" size={20} color={K_GREEN} />
+                <View style={styles.badge}><Text style={styles.badgeText}>{cart.length}</Text></View>
+              </View>
+              <Text style={styles.floatingTitle}>{cart.length} Item Added</Text>
+            </View>
             <View style={styles.viewKartRow}><Text style={styles.viewKartText}>View Kart</Text><Ionicons name="arrow-forward" size={18} color="#fff" /></View>
           </LinearGradient>
         </TouchableOpacity>
@@ -300,5 +306,10 @@ const styles = StyleSheet.create({
   viewKartText: { color: '#fff', marginRight: 5 },
   wishlistToast: { position: 'absolute', bottom: 10, left: 0, right: 0, alignItems: 'center', zIndex: 100 },
   toastInner: { backgroundColor: '#fff', paddingHorizontal: 25, paddingVertical: 15, borderRadius: 30, flexDirection: 'row', alignItems: 'center', elevation: 15, borderWidth: 1, borderColor: '#f0f0f0' },
-  wishlistToastText: { color: K_DARK_BLUE, fontWeight: 'bold', marginLeft: 10, fontSize: 14 }
+  wishlistToastText: { color: K_DARK_BLUE, fontWeight: 'bold', marginLeft: 10, fontSize: 14 },
+  cartInfo: { flexDirection: 'row', alignItems: 'center' },
+  cartIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+  badge: { position: 'absolute', top: -5, right: -5, backgroundColor: K_GREEN, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
+  badgeText: { color: '#fff', fontSize: 9, fontWeight: 'bold' },
+  floatingTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', marginLeft: 12 },
 });

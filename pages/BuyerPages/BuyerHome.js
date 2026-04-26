@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, 
   TextInput, Dimensions, StatusBar, ImageBackground, FlatList, Animated, ActivityIndicator, Alert 
@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/api';
 
@@ -34,34 +35,53 @@ export default function BuyerHome({ navigation }) {
     { id: '4', name: 'Spices', sub: 'Oils & Spices', img: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?q=80&w=1000' },
   ];
 
+  // 1. Load static-heavy data (Banners/Market Products) only once on mount
   useEffect(() => {
-    fetchInitialData();
-    loadLocalCart();
+    fetchMarketData();
   }, []);
 
-  const fetchInitialData = async () => {
+  // 2. LOGIC: Refresh both Cart and Wishlist state every time the screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadLocalCart();
+      refreshUserWishlist();
+    }, [])
+  );
+
+  const fetchMarketData = async () => {
     try {
-      // 1. Get Live Mandi Prices for Slider
       const marketRes = await apiClient.get('/market/prices');
       setBanners(marketRes.data.prices);
 
-      // 2. Get Farmer Products for Grid
       const productRes = await apiClient.get('/products/market');
       setProducts(productRes.data.data);
-
-      // 3. Get User Wishlist
-      const userRes = await apiClient.get('/auth/stats');
-      setWishlist(userRes.data.user.wishlist || []);
     } catch (err) {
-      console.log("Error loading home:", err);
+      console.log("Error loading market data:", err);
     } finally {
       setLoading(false);
     }
   };
 
+  const refreshUserWishlist = async () => {
+    try {
+      const userRes = await apiClient.get('/auth/stats');
+      setWishlist(userRes.data.user.wishlist || []);
+    } catch (err) {
+      console.log("Wishlist refresh error:", err);
+    }
+  };
+
   const loadLocalCart = async () => {
-    const storedCart = await AsyncStorage.getItem('kart');
-    if (storedCart) setCart(JSON.parse(storedCart));
+    try {
+      const storedCart = await AsyncStorage.getItem('kart');
+      if (storedCart) {
+        setCart(JSON.parse(storedCart));
+      } else {
+        setCart([]);
+      }
+    } catch (err) {
+      console.log("Cart load error:", err);
+    }
   };
 
   const handleWishlist = async (id) => {
@@ -69,6 +89,7 @@ export default function BuyerHome({ navigation }) {
       const res = await apiClient.post(`/auth/wishlist/${id}`);
       setWishlist(res.data.wishlist);
       
+      // Show toast only when adding
       if (!wishlist.includes(id)) {
         setShowToast(true);
         Animated.timing(toastFadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -76,20 +97,29 @@ export default function BuyerHome({ navigation }) {
           Animated.timing(toastFadeAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => setShowToast(false));
         }, 2000);
       }
-    } catch (err) { Alert.alert("Error", "Could not update wishlist"); }
+    } catch (err) { 
+      Alert.alert("Error", "Could not update wishlist"); 
+    }
   };
 
   const handleAddToCart = async (product) => {
-    const newCart = [...cart];
-    const index = newCart.findIndex(item => item._id === product._id);
-    if (index > -1) {
-      newCart[index].qty += 1;
-    } else {
-      newCart.push({ ...product, qty: 1 });
+    try {
+      let existingCart = await AsyncStorage.getItem('kart');
+      existingCart = existingCart ? JSON.parse(existingCart) : [];
+      
+      const index = existingCart.findIndex(item => item._id === product._id);
+      if (index > -1) {
+        existingCart[index].qty += 1;
+      } else {
+        existingCart.push({ ...product, qty: 1 });
+      }
+      
+      setCart(existingCart);
+      await AsyncStorage.setItem('kart', JSON.stringify(existingCart));
+      Alert.alert("Success", `${product.productName} added to Kart!`);
+    } catch (err) {
+      console.log("Add to cart error:", err);
     }
-    setCart(newCart);
-    await AsyncStorage.setItem('kart', JSON.stringify(newCart));
-    Alert.alert("Success", `${product.productName} added to Kart!`);
   };
 
   // Auto-Slider Logic
@@ -137,7 +167,7 @@ export default function BuyerHome({ navigation }) {
           <Text style={{marginLeft: 10, color: '#bbb'}}>Search fresh harvest...</Text>
         </TouchableOpacity>
 
-        {/* SLIDER (Connected to Mandi Prices) */}
+        {/* SLIDER */}
         <View style={styles.bannerContainer}>
           <FlatList
             ref={flatListRef}
@@ -164,7 +194,7 @@ export default function BuyerHome({ navigation }) {
             <View style={styles.headerUnderline} />
         </View>
 
-        {/* GRID (Connected to Products API) */}
+        {/* GRID (Includes Refreshed Wishlist Hearts) */}
         <View style={styles.grid}>
           {products.map((p) => {
             const isFav = wishlist.includes(p._id);
@@ -206,7 +236,7 @@ export default function BuyerHome({ navigation }) {
         </ScrollView>
       </ScrollView>
 
-      {/* FLOATING CART */}
+      {/* FLOATING CART (Refreshes on Focus) */}
       {cart.length > 0 && (
         <TouchableOpacity style={styles.floatingCart} onPress={() => navigation.navigate('Kart')}>
           <LinearGradient colors={[K_DARK_BLUE, '#1c3a6e']} style={styles.floatingContent}>
@@ -225,7 +255,6 @@ export default function BuyerHome({ navigation }) {
   );
 }
 
-// ... Keep your existing Stylesheet exactly as it was ...
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   loader: { flex: 1, justifyContent: 'center' },
@@ -238,7 +267,6 @@ const styles = StyleSheet.create({
   brandSloganText: { fontSize: 10, color: '#f0f0f0' },
   iconCircle: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f5f5', marginHorizontal: 15, borderRadius: 15, paddingHorizontal: 15, height: 50 },
-  searchPlaceholder: { marginLeft: 10, color: '#999' },
   sectionHeaderContainer: { marginHorizontal: 20, marginTop: 30 },
   sectionTitle: { fontSize: 20, fontWeight: 'bold', color: K_DARK_BLUE },
   headerUnderline: { width: 40, height: 4, backgroundColor: K_GREEN, marginTop: 4, borderRadius: 2 },
@@ -260,9 +288,17 @@ const styles = StyleSheet.create({
   catOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 15, justifyContent: 'center', padding: 10 },
   catMainName: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   catSubName: { color: '#eee', fontSize: 10 },
+  bannerContainer: { marginTop: 20, alignItems: 'center' },
+  bannerWrapper: { width: width, paddingHorizontal: 15 },
+  bannerImg: { width: width - 30, height: 260, justifyContent: 'flex-end', overflow: 'hidden' },
+  bannerOverlay: { padding: 25, borderRadius: 25, height: '100%', justifyContent: 'flex-end' },
+  bannerTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
   floatingCart: { position: 'absolute', bottom: 20, left: 15, right: 15 },
   floatingContent: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, borderRadius: 15 },
   floatingTitle: { color: '#fff', fontWeight: 'bold' },
   viewKartRow: { flexDirection: 'row', alignItems: 'center' },
-  viewKartText: { color: '#fff', marginRight: 5 }
+  viewKartText: { color: '#fff', marginRight: 5 },
+  wishlistToast: { position: 'absolute', bottom: 10, left: 0, right: 0, alignItems: 'center', zIndex: 100 },
+  toastInner: { backgroundColor: '#fff', paddingHorizontal: 25, paddingVertical: 15, borderRadius: 30, flexDirection: 'row', alignItems: 'center', elevation: 15, borderWidth: 1, borderColor: '#f0f0f0' },
+  wishlistToastText: { color: K_DARK_BLUE, fontWeight: 'bold', marginLeft: 10, fontSize: 14 }
 });

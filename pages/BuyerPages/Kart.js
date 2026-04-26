@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -7,35 +7,63 @@ import {
   Image, 
   TouchableOpacity, 
   Dimensions,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native'; // Hook for navigation focus
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 const K_GREEN = '#6aaa49';
 const K_DARK_BLUE = '#112244';
 
-export default function Kart({ navigation, route }) {
-  const { cartData } = route.params || { cartData: [] };
-  const [cartItems, setCartItems] = useState(cartData);
+export default function Kart({ navigation }) {
+  const [cartItems, setCartItems] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (route.params?.cartData) {
-      setCartItems(route.params.cartData);
+  // --- LOGIC: Fetch from Local Storage every time this screen is focused ---
+  useFocusEffect(
+    useCallback(() => {
+      loadKart();
+    }, [])
+  );
+
+  const loadKart = async () => {
+    try {
+      const storedKart = await AsyncStorage.getItem('kart');
+      if (storedKart) {
+        setCartItems(JSON.parse(storedKart));
+      } else {
+        setCartItems([]);
+      }
+    } catch (error) {
+      console.log("Error loading kart:", error);
+    } finally {
+      setLoading(false);
     }
-  }, [route.params?.cartData]);
+  };
+
+  // Helper to update both state and local storage
+  const syncKart = async (updatedItems) => {
+    try {
+      await AsyncStorage.setItem('kart', JSON.stringify(updatedItems));
+      setCartItems(updatedItems);
+    } catch (error) {
+      console.log("Error syncing kart:", error);
+    }
+  };
 
   const updateQty = (id, action) => {
-    setCartItems(prevItems => 
-      prevItems.map(item => {
-        if (item.id === id) {
-          const newQty = action === 'plus' ? item.qty + 1 : item.qty - 1;
-          return { ...item, qty: Math.max(1, newQty) }; 
-        }
-        return item;
-      })
-    );
+    const updated = cartItems.map(item => {
+      if (item._id === id) {
+        const newQty = action === 'plus' ? item.qty + 1 : item.qty - 1;
+        return { ...item, qty: Math.max(1, newQty) };
+      }
+      return item;
+    });
+    syncKart(updated);
   };
 
   const removeItem = (id, name) => {
@@ -44,14 +72,27 @@ export default function Kart({ navigation, route }) {
       `Remove ${name} from your kart?`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Remove", style: "destructive", onPress: () => {
-          setCartItems(prevItems => prevItems.filter(item => item.id !== id));
-        }}
+        { 
+          text: "Remove", 
+          style: "destructive", 
+          onPress: () => {
+            const filtered = cartItems.filter(item => item._id !== id);
+            syncKart(filtered);
+          } 
+        }
       ]
     );
   };
 
-  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  const clearKart = () => {
+    Alert.alert("Clear Kart", "Empty your entire kart?", [
+      { text: "No" },
+      { text: "Yes", onPress: () => syncKart([]) }
+    ]);
+  };
+
+  // Calculations
+  const subtotal = cartItems.reduce((sum, item) => sum + (item.pricePerUnit * item.qty), 0);
   const deliveryFee = cartItems.length > 0 ? 20 : 0;
   const total = subtotal + deliveryFee;
 
@@ -60,28 +101,28 @@ export default function Kart({ navigation, route }) {
       <View style={styles.cardTopSection}>
         <TouchableOpacity 
             style={styles.cardInfoArea} 
-            onPress={() => navigation.navigate('ProductDetails', { product: item })}
+            onPress={() => navigation.navigate('ProductDetails', { productId: item._id })}
         >
-            <Image source={{ uri: item.img }} style={styles.itemImg} />
+            <Image source={{ uri: item.productImageURL }} style={styles.itemImg} />
             <View style={styles.itemInfo}>
                 <View style={styles.farmerBadge}>
-                    <Text style={styles.badgeText}>{item.farmer}</Text>
+                    <Text style={styles.badgeText}>{item.farmerId?.farmName || "Fresh Produce"}</Text>
                 </View>
-                <Text style={styles.itemName}>{item.name}</Text>
+                <Text style={styles.itemName} numberOfLines={1}>{item.productName}</Text>
                 <View style={styles.priceRow}>
-                    <Text style={styles.itemPrice}>₹{item.price}</Text>
+                    <Text style={styles.itemPrice}>₹{item.pricePerUnit}</Text>
                     <Text style={styles.dot}>•</Text>
-                    <Text style={styles.itemWeight}>{item.weight}</Text>
+                    <Text style={styles.itemWeight}>1 {item.unitGiven || 'kg'}</Text>
                 </View>
             </View>
         </TouchableOpacity>
 
         <View style={styles.qtyContainer}>
-            <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item.id, 'minus')}>
+            <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item._id, 'minus')}>
                 <Feather name="minus" size={16} color={item.qty > 1 ? K_DARK_BLUE : "#ccc"} />
             </TouchableOpacity>
             <Text style={styles.qtyText}>{item.qty}</Text>
-            <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item.id, 'plus')}>
+            <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item._id, 'plus')}>
                 <Feather name="plus" size={16} color={K_GREEN} />
             </TouchableOpacity>
         </View>
@@ -89,13 +130,15 @@ export default function Kart({ navigation, route }) {
 
       <TouchableOpacity 
         style={styles.removeBtnDashed} 
-        onPress={() => removeItem(item.id, item.name)}
+        onPress={() => removeItem(item._id, item.productName)}
       >
         <Ionicons name="trash-outline" size={16} color="#e74c3c" />
         <Text style={styles.removeBtnText}>Remove from Kart</Text>
       </TouchableOpacity>
     </View>
   );
+
+  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={K_GREEN}/></View>;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -105,9 +148,7 @@ export default function Kart({ navigation, route }) {
           <Ionicons name="arrow-back" size={24} color={K_DARK_BLUE} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Review Kart</Text>
-        <TouchableOpacity 
-          onPress={() => cartItems.length > 0 && Alert.alert("Clear Kart", "Empty your entire kart?", [{text: "No"}, {text: "Yes", onPress: () => setCartItems([])}])}
-        >
+        <TouchableOpacity onPress={() => cartItems.length > 0 && clearKart()}>
             <Ionicons 
               name="trash-bin-outline" 
               size={22} 
@@ -119,7 +160,7 @@ export default function Kart({ navigation, route }) {
       <FlatList
         data={cartItems}
         renderItem={renderItem}
-        keyExtractor={item => item.id.toString()}
+        keyExtractor={item => item._id}
         contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={() => cartItems.length > 0 ? (
@@ -161,7 +202,7 @@ export default function Kart({ navigation, route }) {
                 </View>
                 <TouchableOpacity 
                     style={styles.placeOrderBtn}
-                    onPress={() => navigation.navigate('PlaceOrder', { totalAmount: total })}
+                    onPress={() => navigation.navigate('PlaceOrder', { totalAmount: total, items: cartItems })}
                 >
                     <Text style={styles.placeOrderText}>PLACE ORDER</Text>
                     <Ionicons name="chevron-forward" size={20} color="#fff" />
@@ -175,6 +216,7 @@ export default function Kart({ navigation, route }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
+  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#f8f8f8' },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: K_DARK_BLUE },
   stepIndicator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: 20 },

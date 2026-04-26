@@ -13,14 +13,27 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.rudradev.kisanmarg"
+      "bundleIdentifier": "com.rudradev.kisanmarg",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Kisan Marg needs your location to show your farm on the map.",
+        "NSPhotoLibraryUsageDescription": "Kisan Marg needs access to save receipts to your gallery."
+      }
     },
     "android": {
       "package": "com.rudradev.kisanmarg",
       "permissions": [
-        "INTERNET"
+        "INTERNET",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
       ],
       "usesCleartextTraffic": true,
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY_HERE"
+        }
+      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#6aaa49"
@@ -30,7 +43,20 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Kisan Marg to save receipts to your photos.",
+          "savePhotosPermission": "Allow Kisan Marg to save receipts to your photos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Kisan Marg to use your location for the farm map."
+        }
+      ]
     ]
   }
 }

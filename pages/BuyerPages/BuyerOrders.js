@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -6,10 +6,13 @@ import {
   FlatList, 
   Image, 
   TouchableOpacity, 
-  Dimensions 
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import apiClient from '../../services/api';
 
 const { width } = Dimensions.get('window');
 const K_GREEN = '#6aaa49';
@@ -18,86 +21,74 @@ const K_ORANGE = '#f39c12';
 
 export default function BuyerOrders({ navigation }) {
   const [activeTab, setActiveTab] = useState('All');
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // 1. DUMMY DATA WITH DIFFERENT STATUSES
-  const allOrders = [
-    { 
-      id: 'ORD-1001', 
-      name: 'Organic Potato', 
-      qty: 2, 
-      unit: 'kg',
-      price: 60,
-      status: 'Processing', // Ongoing
-      date: 'Ordered on 27 Mar 2026',
-      img: 'https://www.jiomart.com/images/product/original/590002402/potato-3-kg-product-images-o590002402-p613131749-0-202512111622.jpg?im=Resize=(1000,1000)' 
-    },
-    { 
-      id: 'ORD-1002', 
-      name: 'Red Tomato', 
-      qty: 1, 
-      unit: 'kg',
-      price: 45,
-      status: 'Delivered', // Completed
-      date: 'Delivered on 25 Mar 2026',
-      img: 'https://static.toiimg.com/thumb/imgsize-23456,msid-69972910,width-600,resizemode-4/69972910.jpg' 
-    },
-    { 
-      id: 'ORD-1003', 
-      name: 'Fresh Spinach', 
-      qty: 3, 
-      unit: 'Bundle',
-      price: 90,
-      status: 'Cancelled', // Completed
-      date: 'Cancelled on 24 Mar 2026',
-      img: 'https://m.media-amazon.com/images/I/511mgTRmbHL._AC_UF1000,1000_QL80_.jpg' 
-    },
-    { 
-      id: 'ORD-1004', 
-      name: 'Green Peas', 
-      qty: 1, 
-      unit: 'kg',
-      price: 35,
-      status: 'Shipped', // Ongoing
-      date: 'Ordered on 26 Mar 2026',
-      img: 'https://ta-malta.com/wp-content/uploads/2025/05/peas-1.jpg' 
-    },
-  ];
+  // --- LOGIC: Fetch Orders every time page is focused ---
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrders();
+    }, [])
+  );
 
-  // 2. FILTER LOGIC FOR TABS
-  const filteredOrders = allOrders.filter(order => {
+  const fetchOrders = async () => {
+    try {
+      const res = await apiClient.get('/orders/buyer');
+      if (res.data.success) {
+        setOrders(res.data.data);
+      }
+    } catch (err) {
+      console.log("Order Fetch Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- TAB FILTERING LOGIC ---
+  const ongoingStatuses = ['Requested', 'Accepted', 'Packed', 'Out for Delivery'];
+  const completedStatuses = ['Completed', 'Cancelled'];
+
+  const filteredOrders = orders.filter(order => {
     if (activeTab === 'All') return true;
-    if (activeTab === 'Ongoing') return order.status === 'Processing' || order.status === 'Shipped';
-    if (activeTab === 'Completed') return order.status === 'Delivered' || order.status === 'Cancelled';
+    if (activeTab === 'Ongoing') return ongoingStatuses.includes(order.status);
+    if (activeTab === 'Completed') return completedStatuses.includes(order.status);
     return true;
   });
 
   const renderOrderCard = ({ item }) => (
     <View style={styles.orderCard}>
       <View style={styles.cardMain}>
-        <Image source={{ uri: item.img }} style={styles.productImg} />
+        {/* Mapping to product.productImageURL from populate */}
+        <Image 
+          source={{ uri: item.product?.productImageURL || 'https://via.placeholder.com/150' }} 
+          style={styles.productImg} 
+        />
         
         <View style={styles.infoContainer}>
           <View style={styles.statusRow}>
             <Text style={[styles.statusText, { 
-                color: item.status === 'Delivered' ? K_GREEN : 
+                color: item.status === 'Completed' ? K_GREEN : 
                        item.status === 'Cancelled' ? '#e74c3c' : K_ORANGE 
             }]}>
               {item.status}
             </Text>
-            <Text style={styles.orderId}>{item.id}</Text>
+            {/* Showing last 6 chars of MongoDB ID */}
+            <Text style={styles.orderId}>#{item._id.slice(-6).toUpperCase()}</Text>
           </View>
 
-          <Text style={styles.productName}>{item.name}</Text>
-          <Text style={styles.qtyText}>Qty: {item.qty} {item.unit}</Text>
-          <Text style={styles.dateText}>{item.date}</Text>
+          <Text style={styles.productName}>{item.product?.productName || 'Product Removed'}</Text>
+          <Text style={styles.qtyText}>Qty: {item.quantity} {item.product?.unitGiven || 'unit'}</Text>
+          <Text style={styles.dateText}>
+            {item.status === 'Completed' ? 'Delivered' : item.status === 'Cancelled' ? 'Cancelled' : 'Ordered'} on {new Date(item.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+          </Text>
         </View>
       </View>
 
       <View style={styles.cardFooter}>
-        <Text style={styles.totalText}>Total: ₹{item.price}</Text>
+        <Text style={styles.totalText}>Total: ₹{item.totalPrice}</Text>
         <TouchableOpacity 
           style={styles.detailsBtn}
-          onPress={() => navigation.navigate('OrderDetails', { order: item })}
+          onPress={() => navigation.navigate('OrderDetails', { orderId: item._id })}
         >
           <Text style={styles.detailsBtnText}>View Details</Text>
           <Ionicons name="chevron-forward" size={14} color={K_GREEN} />
@@ -105,6 +96,8 @@ export default function BuyerOrders({ navigation }) {
       </View>
     </View>
   );
+
+  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={K_GREEN}/></View>;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -138,14 +131,14 @@ export default function BuyerOrders({ navigation }) {
       <FlatList
         data={filteredOrders}
         renderItem={renderOrderCard}
-        keyExtractor={item => item.id}
+        keyExtractor={item => item._id}
         contentContainerStyle={{ padding: 20 }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={() => (
           <View style={styles.emptyState}>
             <MaterialCommunityIcons name="clipboard-text-outline" size={80} color="#eee" />
             <Text style={styles.emptyTitle}>No {activeTab} Orders</Text>
-            <Text style={styles.emptySub}>Looks like you haven't placed any orders here yet.</Text>
+            <Text style={styles.emptySub}>Looks like you haven't placed any orders in this category yet.</Text>
           </View>
         )}
       />
@@ -155,6 +148,7 @@ export default function BuyerOrders({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fcfcfc' },
+  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#fff' },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: K_DARK_BLUE },
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -8,18 +8,64 @@ import {
   TouchableOpacity, 
   Dimensions,
   Alert,
-  StatusBar 
+  StatusBar,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient from '../../services/api';
 
 const { width } = Dimensions.get('window');
 const K_GREEN = '#6aaa49';
 const K_DARK_BLUE = '#112244';
 
 export default function BuyerProfile({ navigation }) {
-  
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [stats, setStats] = useState({ orders: 0, wishlist: 0, savings: 0 });
+
+  // --- LOGIC: Fetch User Data from DB on every visit ---
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfileData();
+    }, [])
+  );
+
+  const fetchProfileData = async () => {
+    try {
+      const res = await apiClient.get('/auth/stats');
+      if (res.data.success) {
+        setUser(res.data.user);
+        setStats({
+          orders: res.data.stats.orders || 0,
+          wishlist: res.data.user.wishlist ? res.data.user.wishlist.length : 0,
+          savings: 450 // Placeholder until savings logic is added to backend
+        });
+      }
+    } catch (err) {
+      console.log("Profile Load Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert("Logout", "Are you sure you want to exit?", [
+      { text: "Cancel", style: "cancel" },
+      { 
+        text: "Logout", 
+        style: "destructive", 
+        onPress: async () => {
+          await AsyncStorage.multiRemove(['token', 'userData', 'kart']);
+          navigation.replace('Login');
+        } 
+      }
+    ]);
+  };
+
   const ProfileOption = ({ icon, title, subtitle, onPress, color = K_DARK_BLUE, isLast = false }) => (
     <TouchableOpacity 
       style={[styles.optionRow, isLast && { borderBottomWidth: 0 }]} 
@@ -37,12 +83,13 @@ export default function BuyerProfile({ navigation }) {
     </TouchableOpacity>
   );
 
-  const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to exit?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Logout", style: "destructive", onPress: () => navigation.replace('Login') }
-    ]);
-  };
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={K_GREEN} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -68,32 +115,31 @@ export default function BuyerProfile({ navigation }) {
           <View style={styles.profileInfo}>
             <View style={styles.avatarContainer}>
               <Image 
-                source={{ uri: 'https://writestylesonline.com/wp-content/uploads/2016/08/Follow-These-Steps-for-a-Flawless-Professional-Profile-Picture.jpg' }} 
+                source={{ uri: user?.dpImageURL || 'https://via.placeholder.com/150' }} 
                 style={styles.avatar} 
               />
-              <TouchableOpacity style={styles.editBadge}>
-                <Feather name="camera" size={14} color="#fff" />
-              </TouchableOpacity>
             </View>
-            <Text style={styles.userName}>Smruti Ranjan</Text>
-            <Text style={styles.userHandle}>+91 98765 43210 • smruti@kisanmarg.com</Text>
+            <Text style={styles.userName}>{user?.name || 'User'}</Text>
+            <Text style={styles.userHandle}>
+              {user?.phno ? `+91 ${user.phno}` : ''} {user?.email ? `• ${user.email}` : ''}
+            </Text>
           </View>
         </View>
 
-        {/* --- 2. STATS BAR --- */}
+        {/* --- 2. STATS BAR (Real Data) --- */}
         <View style={styles.statsBar}>
           <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('BuyerOrders')}>
-            <Text style={styles.statNumber}>12</Text>
+            <Text style={styles.statNumber}>{stats.orders}</Text>
             <Text style={styles.statLabel}>Orders</Text>
           </TouchableOpacity>
           <View style={styles.statDivider} />
-          <TouchableOpacity style={styles.statItem}>
-            <Text style={styles.statNumber}>5</Text>
+          <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('Wishlist')}>
+            <Text style={styles.statNumber}>{stats.wishlist}</Text>
             <Text style={styles.statLabel}>Wishlist</Text>
           </TouchableOpacity>
           <View style={styles.statDivider} />
           <TouchableOpacity style={styles.statItem}>
-            <Text style={styles.statNumber}>₹450</Text>
+            <Text style={styles.statNumber}>₹{stats.savings}</Text>
             <Text style={styles.statLabel}>Savings</Text>
           </TouchableOpacity>
         </View>
@@ -179,7 +225,7 @@ export default function BuyerProfile({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
   headerCard: { height: 260, backgroundColor: '#fff', alignItems: 'center', marginBottom: 60, position: 'relative' },
-  headerGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 180, borderBottomLeftRadius: 40, borderBottomRightRadius: 40, overflow: 'hidden' },
+  headerGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 150, borderBottomLeftRadius: 40, borderBottomRightRadius: 40, overflow: 'hidden' },
   appBranding: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 15, width: '100%' },
   headerLogo: { width: 40, height: 40, resizeMode: 'contain', marginRight: 12 },
   titleContainer: { flexDirection: 'column', justifyContent: 'center' },
@@ -187,8 +233,7 @@ const styles = StyleSheet.create({
   headerSloganText: { fontSize: 7, color: 'rgba(255, 255, 255, 0.85)', fontWeight: '600', marginTop: 2, letterSpacing: 0.2 },
   profileInfo: { marginTop: 90, alignItems: 'center', zIndex: 1 },
   avatarContainer: { position: 'relative' },
-  avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: '#fff' },
-  editBadge: { position: 'absolute', bottom: 5, right: 5, backgroundColor: K_DARK_BLUE, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
+  avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: '#fff' },
   userName: { fontSize: 22, fontWeight: 'bold', color: K_DARK_BLUE, marginTop: 10 },
   userHandle: { fontSize: 12, color: '#888', marginTop: 4 },
   statsBar: { flexDirection: 'row', backgroundColor: '#fff', marginHorizontal: 20, marginTop: -30, borderRadius: 20, paddingVertical: 20, elevation: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, zIndex: 10 },

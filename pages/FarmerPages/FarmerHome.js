@@ -16,6 +16,7 @@ const LOGO_WREATH = require('../../assets/App-logo-only-no-bg.png');
 const END_OF_THE_PAGE = require('../../assets/Lantern-bro.png');    
 
 export default function FarmerHome({ navigation }) {
+  const pos1Ref = useRef(null);
   const pos2Ref = useRef(null);
   
   const [user, setUser] = useState(null);
@@ -28,25 +29,34 @@ export default function FarmerHome({ navigation }) {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentPos1Idx, setCurrentPos1Idx] = useState(0);
+  const [currentPos2Idx, setCurrentPos2Idx] = useState(0);
 
   const fetchData = async () => {
     try {
+      setIsLoading(true);
+
       const storedUser = await AsyncStorage.getItem('userData');
-      if (storedUser) setUser(JSON.parse(storedUser));
+      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
 
-      const [statsRes, slidersRes, ordersRes, priceRes] = await Promise.all([
-        apiClient.get('/auth/stats'),
-        apiClient.get('/sliders'),
-        apiClient.get('/orders/ongoing'),
-        apiClient.get('/market/prices') 
-      ]);
+      const userType = parsedUser?.userType || 'Farmer';
 
-      setStats(statsRes.data.stats || { orders: 0, rating: 0, profit: 0 });
-      const allSliders = slidersRes.data.data || [];
-      setPos1Sliders(allSliders.filter(s => s.position === 'Position1'));
-      setPos2Sliders(allSliders.filter(s => s.position === 'Position2'));
-      setOngoingOrders(ordersRes.data.orders || []);
-      setMarketPrices(priceRes.data.prices || []);
+      const statsRes   = await apiClient.get('/auth/stats').catch(() => null);
+      const slidersRes = await apiClient.get(`/sliders?userType=${userType}`).catch(() => null);
+      const ordersRes  = await apiClient.get('/orders/ongoing').catch(() => null);
+      const priceRes   = await apiClient.get('/market/prices').catch(() => null);
+
+      setStats(statsRes?.data?.stats || { orders: 0, rating: 0, profit: 0 });
+
+      const allSliders = slidersRes?.data?.data || [];
+
+      const pos1 = allSliders.find(s => s.sliderPosition === 1);
+      const pos2 = allSliders.find(s => s.sliderPosition === 2);
+
+      setPos1Sliders(pos1 ? pos1.sliderImages : []);
+      setPos2Sliders(pos2 ? pos2.sliderImages : []);
+
+      setOngoingOrders(ordersRes?.data?.orders || []);
+      setMarketPrices(priceRes?.data?.prices || []);
 
     } catch (error) {
       console.log("Dashboard Error:", error.message);
@@ -56,17 +66,44 @@ export default function FarmerHome({ navigation }) {
     }
   };
 
+
   useEffect(() => { fetchData(); }, []);
 
-  // Position 1 Auto-Slider Logic
+  // ✅ AUTO SLIDE POS1
   useEffect(() => {
-    if (pos1Sliders.length > 0) {
-      const interval = setInterval(() => {
-        setCurrentPos1Idx((prev) => (prev + 1) % pos1Sliders.length);
-      }, 6000);
-      return () => clearInterval(interval);
-    }
-  }, [pos1Sliders]);
+  if (pos1Sliders.length === 0) return;
+
+  const interval = setInterval(() => {
+    const nextIndex = (currentPos1Idx + 1) % pos1Sliders.length;
+
+    pos1Ref.current?.scrollToIndex({
+      index: nextIndex,
+      animated: true,
+    });
+
+    setCurrentPos1Idx(nextIndex);
+  }, 3500);
+
+  return () => clearInterval(interval);
+}, [currentPos1Idx, pos1Sliders.length]);
+
+  // ✅ AUTO SLIDE POS2
+  useEffect(() => {
+    if (pos2Sliders.length === 0) return;
+
+    const interval = setInterval(() => {
+      const nextIndex = (currentPos2Idx + 1) % pos2Sliders.length;
+
+      pos2Ref.current?.scrollToIndex({
+        index: nextIndex,
+        animated: true,
+      });
+
+      setCurrentPos2Idx(nextIndex);
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [currentPos2Idx, pos2Sliders]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -107,19 +144,35 @@ export default function FarmerHome({ navigation }) {
       >
         <View style={{ height: 80 }} />
 
-        {/* 3. WELCOME & SLIDER POSITION 1 */}
-        <View style={styles.welcomeWrapper}>
+        {/* 3. POSITION 1 FULL SLIDER */}
+        <View style={styles.sliderWrapper}>
           {pos1Sliders.length > 0 ? (
-            <ImageBackground source={{ uri: pos1Sliders[currentPos1Idx].sliderImages[0].imgurl }} style={styles.dynamicBg}>
-              <LinearGradient colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.8)']} style={styles.innerGradient} />
-              <View style={styles.welcomeContent}>
-                <Text style={styles.welcomeText}>Namaste, <Text style={styles.nameText}>{user?.name || "Farmer"}</Text></Text>
-                <Text style={styles.dynamicQuote}>{pos1Sliders[currentPos1Idx].description}</Text>
-              </View>
-            </ImageBackground>
+            <FlatList
+              ref={pos1Ref} 
+              data={pos1Sliders}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item._id}
+              onMomentumScrollEnd={(e) => {
+                const index = Math.round(e.nativeEvent.contentOffset.x / width);
+                setCurrentPos1Idx(index);
+              }}
+              renderItem={({ item }) => (
+                <ImageBackground
+                  source={{ uri: item.imgurl }}
+                  style={styles.sliderImage}
+                >
+                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.sliderOverlay} />
+                  <View style={styles.sliderContent}>
+                    <Text style={styles.sliderTitle}>{item.title}</Text>
+                  </View>
+                </ImageBackground>
+              )}
+            />
           ) : (
-            <View style={[styles.dynamicBg, {backgroundColor: K_DARK_BLUE, justifyContent:'center', alignItems:'center'}]}>
-               <Text style={{color:'#fff'}}>Welcome, {user?.name}</Text>
+            <View style={[styles.sliderImage, { justifyContent: 'center', alignItems: 'center' }]}>
+              <Text>No sliders available</Text>
             </View>
           )}
         </View>
@@ -154,19 +207,35 @@ export default function FarmerHome({ navigation }) {
           <View style={styles.emptyView}><Text style={styles.emptyText}>No ongoing orders.</Text></View>
         )}
 
-        {/* 7. SLIDER POSITION 2 */}
         <Text style={styles.sectionTitle}>Government News</Text>
         <FlatList
+          ref={pos2Ref}
           data={pos2Sliders}
           horizontal
+          pagingEnabled
           showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item._id}
+          onMomentumScrollEnd={(e) => {
+            const index = Math.round(e.nativeEvent.contentOffset.x / (width - 80));
+            setCurrentPos2Idx(index);
+          }}
+          getItemLayout={(data, index) => ({
+            length: width - 80,
+            offset: (width - 80) * index,
+            index,
+          })}
           renderItem={({ item }) => (
-            <ImageBackground source={{ uri: item.sliderImages[0].imgurl }} style={styles.newsCard} imageStyle={{ borderRadius: 20 }}>
-               <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.newsOverlay} />
-               <Text style={styles.newsText}>{item.description}</Text>
+            <ImageBackground
+              source={{ uri: item.imgurl }}
+              style={styles.newsCard}
+              imageStyle={{ borderRadius: 20 }}
+            >
+              <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.newsOverlay} />
+              <Text style={styles.newsText}>{item.title}</Text>
             </ImageBackground>
           )}
         />
+
 
         {/* 8. MARKET PRICES (10 VEGETABLES) */}
         <Text style={styles.sectionTitle}>Mandi Price (Daily Use)</Text>
@@ -226,7 +295,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginHorizontal: 20, marginTop: 30, color: K_DARK_BLUE },
   emptyView: { padding: 20, alignItems:'center' },
   emptyText: { color: '#999', fontSize: 12 },
-  newsCard: { width: width - 80, height: 150, marginLeft: 20, justifyContent: 'flex-end', padding: 15 },
+  newsCard: { width: width - 80, height: 220, marginLeft: 20, justifyContent: 'flex-end', padding: 15 },
   newsOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 20 },
   newsText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   marketList: { paddingHorizontal: 20, marginTop: 15 },
@@ -239,5 +308,31 @@ const styles = StyleSheet.create({
   marketUnit: { fontSize: 10, color: '#666' },
   endSection: { alignItems: 'center', marginTop: 30 },
   endImg: { width: 100, height: 100 },
-  endText: { color: '#ccc', fontSize: 10 }
+  endText: { color: '#ccc', fontSize: 10 },
+  sliderWrapper: {
+  marginTop: 100,
+},
+
+sliderImage: {
+  width: width - 40,
+  height: 220,
+  marginHorizontal: 20,
+  borderRadius: 20,
+  overflow: 'hidden',
+  justifyContent: 'flex-end',
+},
+
+sliderOverlay: {
+  ...StyleSheet.absoluteFillObject,
+},
+
+sliderContent: {
+  padding: 15,
+},
+
+sliderTitle: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: 'bold',
+},
 });

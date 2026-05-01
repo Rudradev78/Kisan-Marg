@@ -48,19 +48,27 @@ export default function BuyerHome({ navigation }) {
     }, [])
   );
 
-  const fetchMarketData = async () => {
-    try {
-      const marketRes = await apiClient.get('/market/prices');
-      setBanners(marketRes.data.prices);
+  
 
-      const productRes = await apiClient.get('/products/market');
-      setProducts(productRes.data.data);
-    } catch (err) {
-      console.log("Error loading market data:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+const fetchMarketData = async () => {
+  try {
+    const slidersRes = await apiClient.get(`/sliders?userType=Buyer`);
+
+    const allSliders = slidersRes?.data?.data || [];
+    const pos1 = allSliders.find(s => s.sliderPosition === 1);
+
+    setBanners(pos1 ? pos1.sliderImages : []);
+
+    // products (unchanged)
+    const productRes = await apiClient.get('/products/market');
+    setProducts(productRes.data.data);
+
+  } catch (err) {
+    console.log("Error loading market data:", err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const refreshUserWishlist = async () => {
     try {
@@ -123,16 +131,22 @@ export default function BuyerHome({ navigation }) {
   };
 
   // Auto-Slider Logic
-  useEffect(() => {
-    if (banners.length > 0) {
-      const interval = setInterval(() => {
-        let nextIndex = (activeIndex + 1) % banners.length;
-        setActiveIndex(nextIndex);
-        flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
-      }, 4000);
-      return () => clearInterval(interval);
-    }
-  }, [activeIndex, banners]);
+useEffect(() => {
+  if (banners.length === 0) return;
+
+  const interval = setInterval(() => {
+    const nextIndex = (activeIndex + 1) % banners.length;
+
+    flatListRef.current?.scrollToIndex({
+      index: nextIndex,
+      animated: true,
+    });
+
+    setActiveIndex(nextIndex);
+  }, 4000);
+
+  return () => clearInterval(interval);
+}, [activeIndex, banners.length]);
 
   if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={K_GREEN}/></View>;
 
@@ -168,26 +182,53 @@ export default function BuyerHome({ navigation }) {
         </TouchableOpacity>
 
         {/* SLIDER */}
-        <View style={styles.bannerContainer}>
-          <FlatList
-            ref={flatListRef}
-            data={banners}
-            horizontal pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onScroll={(e) => setActiveIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
-            renderItem={({ item }) => (
-              <View style={styles.bannerWrapper}>
-                <ImageBackground source={{ uri: item.image }} style={styles.bannerImg} imageStyle={{ borderRadius: 25 }}>
-                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.bannerOverlay}>
-                    <Text style={styles.bannerTitle}>Live: {item.name}</Text>
-                    <Text style={{color: '#fff'}}>Market Price: ₹{item.price}/{item.unit}</Text>
-                  </LinearGradient>
-                </ImageBackground>
-              </View>
-            )}
-            keyExtractor={item => item.id}
-          />
-        </View>
+        <FlatList
+          ref={flatListRef}
+          data={banners}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+
+          initialScrollIndex={0}
+          onScrollToIndexFailed={(info) => {
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({
+                index: info.index,
+                animated: true,
+              });
+            }, 500);
+          }}
+
+            onMomentumScrollEnd={(e) => {
+            const index = Math.round(e.nativeEvent.contentOffset.x / width);
+            setActiveIndex(index);
+          }}
+
+          getItemLayout={(data, index) => ({
+            length: width,
+            offset: width * index,
+            index,
+          })}
+
+          keyExtractor={(item) => item._id}
+
+          renderItem={({ item }) => (
+            <View style={styles.bannerWrapper}>
+              <ImageBackground
+                source={{ uri: item.imgurl }}
+                style={styles.bannerImg}
+                imageStyle={{ borderRadius: 25 }}
+              >
+                <LinearGradient
+                  colors={['transparent', 'rgba(0,0,0,0.8)']}
+                  style={styles.bannerOverlay}
+                >
+                  <Text style={styles.bannerTitle}>{item.title}</Text>
+                </LinearGradient>
+              </ImageBackground>
+            </View>
+          )}
+        />
 
         <View style={styles.sectionHeaderContainer}>
             <Text style={styles.sectionTitle}>Availables near you</Text>
@@ -295,7 +336,7 @@ const styles = StyleSheet.create({
   catMainName: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   catSubName: { color: '#eee', fontSize: 10 },
   bannerContainer: { marginTop: 20, alignItems: 'center' },
-  bannerWrapper: { width: width, paddingHorizontal: 15 },
+  bannerWrapper: { width: width, paddingHorizontal: 15, marginTop: 20, },
   bannerImg: { width: width - 30, height: 260, justifyContent: 'flex-end', overflow: 'hidden' },
   bannerOverlay: { padding: 25, borderRadius: 25, height: '100%', justifyContent: 'flex-end' },
   bannerTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold' },

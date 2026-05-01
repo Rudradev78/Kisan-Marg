@@ -128,7 +128,7 @@ export default function FarmerHome({ navigation }) {
                 <Text style={styles.appName}>Kisan Marg</Text>
                 <Text style={styles.slogan}>A Direct Path from Farm to Market</Text>
               </View>
-              <TouchableOpacity style={styles.notifBtn}>
+              <TouchableOpacity style={styles.notifBtn} onPress={() => navigation.navigate('FarmerAlertNotification')}>
                 <Ionicons name="notifications-outline" size={24} color={K_GREEN} />
                 <View style={styles.notifDot} />
               </TouchableOpacity>

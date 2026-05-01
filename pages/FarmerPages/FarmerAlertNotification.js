@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -7,10 +7,14 @@ import {
   Image, 
   TouchableOpacity, 
   Dimensions, 
-  StatusBar 
+  StatusBar,
+  ActivityIndicator,
+  RefreshControl 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import apiClient from '../../services/api'; 
+import moment from 'moment';
 
 const { width } = Dimensions.get('window');
 const K_GREEN = '#6aaa49';
@@ -18,32 +22,43 @@ const K_DARK_BLUE = '#112244';
 
 export default function FarmerAlertNotification({ navigation }) {
   const [activeTab, setActiveTab] = useState('notifications');
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [alerts, setAlerts] = useState([]);
 
+  // MOCK DATA: Farmer activity notifications
   const [notifications, setNotifications] = useState([
     { id: '1', title: 'New Order Received! 📦', body: 'Smruti Ranjan ordered 10kg Potato. Pickup scheduled.', time: '5m ago', type: 'order', read: false },
     { id: '2', title: 'Payment Settled 💰', body: '₹1,200 has been transferred to your bank account.', time: '4h ago', type: 'payment', read: true },
     { id: '3', title: 'Stock Low ⚠️', body: 'Your Onion stock is nearly empty. Update now!', time: 'Yesterday', type: 'inventory', read: true },
   ]);
 
-  const [alerts, setAlerts] = useState([
-    { 
-      id: 'a1', 
-      title: 'Heavy Rain Alert: Puri', 
-      desc: 'Protect your harvested crops. Heavy rain expected tonight.', 
-      img: 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?auto=format&fit=crop&w=800&q=80', 
-      time: '2h ago' 
-    },
-    { 
-      id: 'a2', 
-      title: 'MSP Price Update 2026', 
-      desc: 'New minimum support price for Paddy released by Govt.', 
-      img: 'https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?auto=format&fit=crop&w=800&q=80', 
-      time: '1d ago' 
-    },
-  ]);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  const removeAlert = (id) => setAlerts(prev => prev.filter(a => a.id !== id));
+  const fetchData = async () => {
+    try {
+      // Corrected casing to 'Farmer' to match the database enum
+      const response = await apiClient.get('/alerts?type=Farmer');
+      
+      if (response.data.success) {
+        setAlerts(response.data.data);
+      }
+    } catch (error) {
+      console.log("Fetch Alerts Error:", error.message);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  };
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
+
+  // --- RENDER NOTIFICATION (Activity) ---
   const renderNotification = ({ item }) => (
     <TouchableOpacity 
         style={[styles.notifCard, !item.read && styles.unreadNotif]} 
@@ -66,20 +81,27 @@ export default function FarmerAlertNotification({ navigation }) {
     </TouchableOpacity>
   );
 
+  // --- RENDER ALERT (News & Offers) ---
   const renderAlert = ({ item }) => (
     <TouchableOpacity style={styles.alertCard} activeOpacity={0.9}>
       <View style={styles.alertImageContainer}>
-        <Image source={{ uri: item.img }} style={styles.alertImg} />
-        <TouchableOpacity style={styles.alertCloseBtn} onPress={() => removeAlert(item.id)}>
+        {item.image ? (
+          <Image source={{ uri: item.image }} style={styles.alertImg} />
+        ) : (
+          <View style={[styles.alertImg, styles.placeholderImg]}>
+             <Ionicons name="image-outline" size={50} color="#ccc" />
+          </View>
+        )}
+        <TouchableOpacity style={styles.alertCloseBtn}>
           <Ionicons name="close" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
       <View style={styles.alertTextContent}>
         <View style={styles.alertHeaderRow}>
-            <Text style={styles.alertTitle} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.alertTime}>{item.time}</Text>
+            <Text style={styles.alertTitle} numberOfLines={1}>{item.heading}</Text>
+            <Text style={styles.alertTime}>{moment(item.createdAt).fromNow()}</Text>
         </View>
-        <Text style={styles.alertDesc} numberOfLines={1}>{item.desc}</Text>
+        <Text style={styles.alertDesc} numberOfLines={1}>{item.description}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -94,26 +116,36 @@ export default function FarmerAlertNotification({ navigation }) {
       </View>
 
       <View style={styles.tabBar}>
-        <TouchableOpacity style={[styles.tab, activeTab === 'notifications' && styles.activeTab]} onPress={() => setActiveTab('notifications')}>
+        <TouchableOpacity 
+            style={[styles.tab, activeTab === 'notifications' && styles.activeTab]} 
+            onPress={() => setActiveTab('notifications')}
+        >
           <Text style={[styles.tabText, activeTab === 'notifications' && styles.activeTabText]}>Activity</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.tab, activeTab === 'alerts' && styles.activeTab]} onPress={() => setActiveTab('alerts')}>
+        <TouchableOpacity 
+            style={[styles.tab, activeTab === 'alerts' && styles.activeTab]} 
+            onPress={() => setActiveTab('alerts')}
+        >
           <Text style={[styles.tabText, activeTab === 'alerts' && styles.activeTabText]}>News & Offers</Text>
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={activeTab === 'notifications' ? notifications : alerts}
-        renderItem={activeTab === 'notifications' ? renderNotification : renderAlert}
-        keyExtractor={item => item.id}
-        contentContainerStyle={{ padding: 20 }}
-        ListEmptyComponent={<Text style={styles.emptyText}>No recent activity</Text>}
-      />
+      {isLoading ? (
+        <View style={styles.loaderContainer}><ActivityIndicator size="large" color={K_GREEN} /></View>
+      ) : (
+        <FlatList
+          data={activeTab === 'notifications' ? notifications : alerts}
+          renderItem={activeTab === 'notifications' ? renderNotification : renderAlert}
+          keyExtractor={item => item._id || item.id}
+          contentContainerStyle={{ padding: 20 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={K_GREEN} />}
+          ListEmptyComponent={<Text style={styles.emptyText}>Nothing to show here</Text>}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
-// STYLES remain identical to BuyerAlertNotification
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#f9f9f9' },
@@ -134,11 +166,13 @@ const styles = StyleSheet.create({
   alertCard: { backgroundColor: '#fff', borderRadius: 20, height: 320, marginBottom: 25, elevation: 5, overflow: 'hidden', borderWidth: 1, borderColor: '#eee' },
   alertImageContainer: { flex: 4 }, 
   alertImg: { width: '100%', height: '100%' },
+  placeholderImg: { backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
   alertCloseBtn: { position: 'absolute', top: 15, right: 15, backgroundColor: 'rgba(0,0,0,0.5)', width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
   alertTextContent: { flex: 1, padding: 15, justifyContent: 'center' }, 
   alertHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
   alertTitle: { fontSize: 16, fontWeight: 'bold', color: K_DARK_BLUE, width: '75%' },
   alertTime: { fontSize: 10, color: '#aaa' },
   alertDesc: { fontSize: 12, color: '#666' },
+  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyText: { textAlign: 'center', marginTop: 100, color: '#ccc', fontSize: 16 }
 });

@@ -1,17 +1,13 @@
 import React, { useState } from 'react';
 import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  ScrollView, 
-  TouchableOpacity, 
-  Image,
-  Dimensions,
-  Alert
+  StyleSheet, Text, View, ScrollView, TouchableOpacity, 
+  Image, Dimensions, Alert, ActivityIndicator 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import RazorpayCheckout from 'react-native-razorpay'; // Import SDK
+import apiClient from '../../services/api';
 
 const { width } = Dimensions.get('window');
 const K_GREEN = '#6aaa49';
@@ -19,9 +15,10 @@ const K_DARK_BLUE = '#112244';
 
 export default function Payment({ navigation, route }) {
   const [selectedMethod, setSelectedMethod] = useState('upi');
+  const [processing, setProcessing] = useState(false);
   
-  // 🟢 LOGIC: Receive dynamic total from Kart/PlaceOrder
-  const { totalAmount } = route.params || { totalAmount: 0 }; 
+  // LOGIC: Receive delivery details and amount from previous page
+  const { totalAmount, deliveryAddress, productData } = route.params || { totalAmount: 0 }; 
 
   const paymentMethods = [
     { id: 'upi', title: 'UPI (GPay, PhonePe, BHIM)', icon: 'qrcode', provider: 'MaterialCommunityIcons' },
@@ -30,21 +27,71 @@ export default function Payment({ navigation, route }) {
     { id: 'cod', title: 'Cash on Delivery', icon: 'hand-holding-usd', provider: 'FontAwesome5' },
   ];
 
-  const handlePayment = () => {
-    const newOrder = {
-      id: 'KM-' + Math.floor(Math.random() * 1000000), 
-      name: 'Organic Potato', 
-      price: totalAmount,
-      status: 'Processing',
-      date: 'Ordered on ' + new Date().toLocaleDateString(),
-      img: 'https://www.jiomart.com/images/product/original/590002402/potato-3-kg-product-images-o590002402-p613131749-0-202512111622.jpg?im=Resize=(1000,1000)',
-      qty: 1, 
-      farmer: 'Rajesh Farms'
+  const handlePayment = async () => {
+    setProcessing(true);
+
+    // Common Order Data for the Database
+    const baseOrderData = {
+      product: productData?._id,
+      quantity: productData?.qty || 1,
+      totalPrice: totalAmount,
+      deliveryFee: 40, // Example
+      shippingAddress: deliveryAddress,
     };
-    if (selectedMethod === 'cod') {
-      navigation.navigate('OrderSuccess');
-    } else {
-      Alert.alert("Razorpay Integration", "This will trigger the Razorpay SDK for the amount of ₹" + totalAmount);
+
+    try {
+      if (selectedMethod === 'cod') {
+        // --- CASH ON DELIVERY FLOW ---
+        const res = await apiClient.post('/orders', { ...baseOrderData, status: 'Requested' });
+        if (res.data.success) {
+          navigation.navigate('OrderSuccess');
+        }
+      } else {
+        // --- RAZORPAY ONLINE FLOW ---
+        
+        // 1. Create Razorpay Order on Server
+        const rzpRes = await apiClient.post('/orders/razorpay', { amount: totalAmount });
+        const { order } = rzpRes.data;
+
+        // 2. Open Razorpay Checkout
+        var options = {
+          description: 'Kisan Marg - Fresh Harvest Payment',
+          image: 'https://i.imgur.com/3giU0Sg.png', // Add your logo here
+          currency: 'INR',
+          key: 'your_razorpay_key_id', // Replace with your REAL Key ID
+          amount: order.amount,
+          name: 'Kisan Marg',
+          order_id: order.id,
+          prefill: {
+            email: 'user@example.com',
+            contact: '9876543210',
+            name: 'Smruti Ranjan'
+          },
+          theme: { color: K_GREEN }
+        };
+
+        RazorpayCheckout.open(options).then(async (data) => {
+          // 3. Verify Payment on Server
+          const verifyRes = await apiClient.post('/orders/verify', {
+            razorpay_order_id: data.razorpay_order_id,
+            razorpay_payment_id: data.razorpay_payment_id,
+            razorpay_signature: data.razorpay_signature,
+            orderData: baseOrderData
+          });
+
+          if (verifyRes.data.success) {
+            navigation.navigate('OrderSuccess');
+          }
+        }).catch((error) => {
+          Alert.alert("Payment Failed", "Something went wrong with the payment. Please try again.");
+          console.log(error);
+        });
+      }
+    } catch (err) {
+      Alert.alert("Error", "Order could not be processed.");
+      console.log(err);
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -117,10 +164,18 @@ export default function Payment({ navigation, route }) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.payBtn} onPress={handlePayment}>
-          <Text style={styles.payBtnText}>
-            {selectedMethod === 'cod' ? 'PLACE ORDER' : 'PAY SECURELY'}
-          </Text>
+        <TouchableOpacity 
+          style={[styles.payBtn, processing && { opacity: 0.7 }]} 
+          onPress={handlePayment}
+          disabled={processing}
+        >
+          {processing ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.payBtnText}>
+              {selectedMethod === 'cod' ? 'PLACE ORDER' : 'PAY SECURELY'}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

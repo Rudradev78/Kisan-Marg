@@ -18,7 +18,6 @@ import AppMenu from './pages/BasicAppPages/AppMenu';
 import Language from './pages/BasicAppPages/Language'; 
 import AboutApp from './pages/BasicAppPages/AboutApp'; 
 import HelpContact from './pages/BasicAppPages/HelpContact';
-import AdminChat from './pages/BasicAppPages/AdminChat'; 
 import PrivacyPolicy from './pages/BasicAppPages/PrivacyPolicy'; 
 
 /* --- FARMER PAGES IMPORTS --- */
@@ -130,7 +129,6 @@ export default function App() {
           <Stack.Screen name="Language" component={Language} />
           <Stack.Screen name="AboutApp" component={AboutApp} />
           <Stack.Screen name="HelpContact" component={HelpContact} />
-          <Stack.Screen name="AdminChat" component={AdminChat} />
           <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicy} />
 
         </Stack.Navigator>

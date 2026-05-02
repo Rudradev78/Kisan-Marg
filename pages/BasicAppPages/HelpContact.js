@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Add useEffect
 import { 
   StyleSheet, 
   Text, 
@@ -160,21 +160,6 @@ export default function HelpContact({ navigation }) {
         <Text style={styles.timingInfo}>Support available: Mon - Sat (9:00 AM - 6:00 PM)</Text>
         <View style={{ height: 100 }} /> 
       </ScrollView>
-
-      {/* --- 5. FLOATING CHAT BUTTON --- */}
-      <TouchableOpacity 
-        style={styles.floatingChatBtn}
-        onPress={() => navigation.navigate('AdminChat')} // Replace 'AdminChat' with your actual screen name
-        activeOpacity={0.9}
-      >
-        <LinearGradient
-          colors={[K_GREEN, '#5a933d']}
-          style={styles.chatGradient}
-        >
-          <MaterialCommunityIcons name="chat-processing" size={28} color="#fff" />
-          <Text style={styles.chatBtnLabel}>Chat</Text>
-        </LinearGradient>
-      </TouchableOpacity>
 
     </SafeAreaView>
   );

@@ -72,7 +72,7 @@ export default function OrderSuccess({ navigation, route }) {
         <TouchableOpacity 
           style={styles.trackBtn}
           onPress={() => {
-            navigation.navigate('OrderDetails', { order: orderData });
+            navigation.navigate('BuyerOrders');
           }}
         >
           <Text style={styles.trackText}>Track Order</Text>

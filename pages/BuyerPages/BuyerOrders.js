@@ -88,7 +88,7 @@ export default function BuyerOrders({ navigation }) {
         <Text style={styles.totalText}>Total: ₹{item.totalPrice}</Text>
         <TouchableOpacity 
           style={styles.detailsBtn}
-          onPress={() => navigation.navigate('OrderDetails', { orderId: item._id })}
+          onPress={() => navigation.navigate('OrderDetails', { order: item })}
         >
           <Text style={styles.detailsBtnText}>View Details</Text>
           <Ionicons name="chevron-forward" size={14} color={K_GREEN} />

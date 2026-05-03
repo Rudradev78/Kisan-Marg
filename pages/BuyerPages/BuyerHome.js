@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/api';
+import { useNotifications } from '../../context/NotificationContext';
 
 const { width } = Dimensions.get('window');
 const K_GREEN = '#6aaa49';
@@ -16,6 +17,8 @@ const K_DARK_BLUE = '#112244';
 const K_ORANGE = '#f39c12'; 
 
 export default function BuyerHome({ navigation }) {
+
+  const { triggerPopup } = useNotifications();
   const [loading, setLoading] = useState(true);
   const [banners, setBanners] = useState([]);
   const [products, setProducts] = useState([]);
@@ -229,6 +232,13 @@ useEffect(() => {
             </View>
           )}
         />
+
+        <TouchableOpacity 
+          onPress={() => triggerPopup({ title: 'Test', message: 'Hello Partner!' })}
+          style={{ padding: 20, backgroundColor: 'red', marginTop: 100 }}
+        >
+          <Text>TEST POPUP</Text>
+        </TouchableOpacity>
 
         <View style={styles.sectionHeaderContainer}>
             <Text style={styles.sectionTitle}>Availables near you</Text>

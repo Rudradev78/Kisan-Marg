@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   StyleSheet, Text, View, FlatList, TouchableOpacity, 
-  Modal, Dimensions, Alert, Image, ActivityIndicator, RefreshControl
+  Modal, Dimensions, Alert, Image, ActivityIndicator, RefreshControl, ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/api';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
 const K_GREEN = '#6aaa49';
@@ -26,21 +27,28 @@ export default function FarmerHistory({ navigation }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const viewShotRef = useRef();
 
-  useEffect(() => {
-    loadInitialData();
-  }, []);
+  // Load user data and fetch history on focus
+  useFocusEffect(
+    useCallback(() => {
+      loadInitialData();
+    }, [])
+  );
 
   const loadInitialData = async () => {
-    const storedUser = await AsyncStorage.getItem('userData');
-    if (storedUser) setUser(JSON.parse(storedUser));
-    fetchHistory();
+    try {
+      const storedUser = await AsyncStorage.getItem('userData');
+      if (storedUser) setUser(JSON.parse(storedUser));
+      fetchHistory();
+    } catch (e) { console.log(e); }
   };
 
   const fetchHistory = async () => {
     try {
       const res = await apiClient.get('/orders/farmer/history');
-      setHistoryData(res.data.data);
-      setStats(res.data.stats);
+      if (res.data.success) {
+        setHistoryData(res.data.data);
+        setStats(res.data.stats || { totalSales: 0, ordersDone: 0 });
+      }
     } catch (err) {
       console.log("History Fetch Error:", err.message);
     } finally {
@@ -59,35 +67,47 @@ export default function FarmerHistory({ navigation }) {
     setModalVisible(true);
   };
 
-  // --- IMAGE CAPTURE LOGIC ---
+  // --- IMAGE CAPTURE LOGIC (Fixed for Android 13+) ---
   const handleCaptureAndShare = async () => {
     try {
       const uri = await viewShotRef.current.capture();
-      await Sharing.shareAsync(uri);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri);
+      }
     } catch (error) { Alert.alert("Error", "Could not share receipt."); }
   };
 
   const handleCaptureAndSave = async () => {
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      // Pass 'true' for write-only permission to avoid audio permission rejection
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status === 'granted') {
         const uri = await viewShotRef.current.capture();
-        await MediaLibrary.saveToLibraryAsync(uri);
-        Alert.alert("Saved ✅", "Receipt saved to gallery!");
+        const asset = await MediaLibrary.createAssetAsync(uri);
+        await MediaLibrary.createAlbumAsync("KisanMarg_Sales", asset, false);
+        Alert.alert("Saved ✅", "Sale receipt saved to gallery!");
+      } else {
+        Alert.alert("Permission Denied", "Gallery access is needed to save bills.");
       }
-    } catch (error) { Alert.alert("Error", "Failed to save."); }
+    } catch (error) { 
+      console.log(error);
+      Alert.alert("Error", "Failed to save. Check storage permissions."); 
+    }
   };
 
   const renderHistoryItem = ({ item }) => (
     <View style={styles.historyCard}>
       <View style={styles.cardHeader}>
-        <View style={styles.idBadge}><Text style={styles.idText}>#{item._id.slice(-6).toUpperCase()}</Text></View>
+        <View style={styles.idBadge}><Text style={styles.idText}>#SAL-{item._id.slice(-6).toUpperCase()}</Text></View>
         <Text style={styles.dateText}>{new Date(item.updatedAt).toLocaleDateString()}</Text>
       </View>
       <View style={styles.cardBody}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.buyerNameList}>{item.buyerId?.name || "Buyer"}</Text>
-          <Text style={styles.itemDetails}>{item.product?.productName} • {item.quantity}kg</Text>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+          <Image source={{ uri: item.product?.productImageURL }} style={{width: 40, height: 40, borderRadius: 8, marginRight: 12}} />
+          <View>
+            <Text style={styles.buyerNameList}>{item.buyerId?.name || "Customer"}</Text>
+            <Text style={styles.itemDetails}>{item.product?.productName} • {item.quantity}kg</Text>
+          </View>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.totalAmount}>₹{item.totalPrice}</Text>
@@ -95,7 +115,7 @@ export default function FarmerHistory({ navigation }) {
         </View>
       </View>
       <TouchableOpacity style={styles.detailsLink} onPress={() => handleViewReceipt(item)}>
-        <Text style={styles.linkText}>View Receipt</Text>
+        <Text style={styles.linkText}>View Full Receipt</Text>
         <Ionicons name="chevron-forward" size={14} color={K_GREEN} />
       </TouchableOpacity>
     </View>
@@ -108,7 +128,7 @@ export default function FarmerHistory({ navigation }) {
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}><Ionicons name="arrow-back" size={24} color={K_DARK_BLUE}/></TouchableOpacity>
         <Text style={styles.headerTitle}>Sales History</Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity onPress={onRefresh}><Ionicons name="refresh" size={22} color={K_DARK_BLUE}/></TouchableOpacity>
       </View>
 
       <LinearGradient colors={[K_DARK_BLUE, '#1a3a6d']} style={styles.summaryCard} start={{x: 0, y: 0}} end={{x: 1, y: 0}}>
@@ -123,70 +143,78 @@ export default function FarmerHistory({ navigation }) {
         renderItem={renderHistoryItem}
         contentContainerStyle={styles.listContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListHeaderComponent={<Text style={styles.listTitle}>Recent Transactions</Text>}
+        ListHeaderComponent={<Text style={styles.listTitle}>Completed Transactions</Text>}
         ListEmptyComponent={<Text style={styles.emptyText}>No sales history found.</Text>}
       />
 
-      {/* --- RECEIPT MODAL --- */}
-      <Modal animationType="slide" transparent={true} visible={modalVisible}>
+      {/* --- SALE RECEIPT MODAL --- */}
+      <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Order Receipt</Text>
+              <Text style={styles.modalTitle}>Sale Receipt</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}><Ionicons name="close-circle" size={30} color="#ddd" /></TouchableOpacity>
             </View>
 
             {selectedOrder && (
-              <View style={styles.modalBody}>
-                <ViewShot ref={viewShotRef} options={{ format: 'jpg', quality: 1.0 }} style={styles.receiptViewshotContainer}>
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.modalBody}>
+                <ViewShot ref={viewShotRef} options={{ format: 'jpg', quality: 1.0 }} style={{ backgroundColor: '#fff' }}>
                   <View style={styles.receiptDetails}>
                     <View style={styles.receiptHeaderRow}>
                       <View style={{flex: 1}}>
-                        <Text style={styles.sellerLabel}>SELLER (FARMER)</Text>
+                        <Text style={styles.sellerLabel}>SELLER / PRODUCER</Text>
                         <Text style={styles.sellerName}>{user?.name}</Text>
                         <Text style={styles.addressValSmall}>{user?.location}</Text>
+                        <Text style={styles.addressValSmall}>Verified Kisan Marg Partner</Text>
                       </View>
                       <Image source={require('../../assets/App-logo-only-no-bg.png')} style={styles.receiptLogo} />
                     </View>
 
                     <View style={styles.receiptIDRow}>
-                       <Text style={styles.receiptLabel}>Transaction ID</Text>
-                       <Text style={styles.receiptValue}>#KM-ORD-{selectedOrder._id.slice(-6).toUpperCase()}</Text>
+                       <Text style={styles.receiptLabel}>Sale ID</Text>
+                       <Text style={styles.receiptValue}>#KM-SAL-{selectedOrder._id.slice(-6).toUpperCase()}</Text>
                     </View>
 
                     <View style={styles.receiptDivider} />
 
                     <View style={styles.receiptInfoGrid}>
                       <View style={styles.infoGroupFull}>
-                        <Text style={styles.infoLabel}>BUYER & DELIVERY ADDRESS</Text>
-                        <Text style={styles.infoVal}>{selectedOrder.buyerId?.name}</Text>
-                        <Text style={styles.addressValSmall}>{selectedOrder.buyerId?.location}</Text>
+                        <Text style={styles.infoLabel}>CUSTOMER DETAILS</Text>
+                        <Text style={styles.infoVal}>{selectedOrder.buyerId?.name || "Customer"}</Text>
+                        <Text style={styles.addressValSmall}>{selectedOrder.buyerId?.location || "Address not provided"}</Text>
+                        <Text style={styles.addressValSmall}>Ph: {selectedOrder.buyerId?.phno || "N/A"}</Text>
                       </View>
+                      
                       <View style={styles.infoGroup}><Text style={styles.infoLabel}>DATE</Text><Text style={styles.infoVal}>{new Date(selectedOrder.updatedAt).toLocaleDateString()}</Text></View>
                       <View style={styles.infoGroup}><Text style={styles.infoLabel}>PRODUCT</Text><Text style={styles.infoVal}>{selectedOrder.product?.productName}</Text></View>
                       <View style={styles.infoGroup}><Text style={styles.infoLabel}>QUANTITY</Text><Text style={styles.infoVal}>{selectedOrder.quantity}kg</Text></View>
-                      <View style={styles.infoGroup}><Text style={styles.infoLabel}>PAYMENT</Text><Text style={styles.infoVal}>Secured UPI</Text></View>
+                      <View style={styles.infoGroup}><Text style={styles.infoLabel}>METHOD</Text><Text style={styles.infoVal}>{selectedOrder.transactionId === 'COD' ? 'Cash' : 'Online'}</Text></View>
+                      
+                      <View style={styles.infoGroupFull}>
+                        <Text style={styles.infoLabel}>TRANSACTION ID</Text>
+                        <Text style={styles.infoVal}>{selectedOrder.transactionId || "N/A"}</Text>
+                      </View>
                     </View>
 
                     <View style={styles.totalRow}>
-                      <Text style={styles.totalLabel}>Total Earned</Text>
+                      <Text style={styles.totalLabel}>Total Revenue</Text>
                       <Text style={styles.totalValue}>₹{selectedOrder.totalPrice}</Text>
                     </View>
-                    <Text style={styles.receiptFooterText}>Generated via Kisan Marg App</Text>
+                    <Text style={styles.receiptFooterText}>Digitally Generated • Kisan Marg Agriculture Network</Text>
                   </View>
                 </ViewShot>
 
                 <View style={styles.modalActionRow}>
                   <TouchableOpacity style={styles.downloadBtn} onPress={handleCaptureAndSave}>
                     <Ionicons name="download-outline" size={20} color="#fff" />
-                    <Text style={styles.actionBtnText}> Download</Text>
+                    <Text style={styles.actionBtnText}> Save Bill</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.shareBtn} onPress={handleCaptureAndShare}>
                     <Ionicons name="share-social-outline" size={20} color={K_GREEN} />
-                    <Text style={[styles.actionBtnText, {color: K_GREEN}]}> Share Bill</Text>
+                    <Text style={[styles.actionBtnText, {color: K_GREEN}]}> Share</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </ScrollView>
             )}
           </View>
         </View>
@@ -243,7 +271,7 @@ const styles = StyleSheet.create({
   infoGroupFull: { width: '100%', marginBottom: 15 },
   infoGroup: { width: '48%', marginBottom: 15 },
   infoLabel: { fontSize: 9, color: '#aaa', letterSpacing: 1, marginBottom: 4, fontWeight: 'bold' },
-  infoVal: { fontSize: 14, fontWeight: 'bold', color: K_DARK_BLUE },
+  infoVal:  { fontSize: 14, fontWeight: 'bold', color: K_DARK_BLUE },
   
   totalRow: { backgroundColor: '#f9f9f9', padding: 15, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 5 },
   totalLabel: { fontSize: 14, fontWeight: 'bold', color: '#666' },

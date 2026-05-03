@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NotificationProvider } from './context/NotificationContext';
 
 /* --- NAVIGATION IMPORTS --- */
 import { FarmerTabs, BuyerTabs } from './navigation/AppNavigator';
@@ -19,6 +20,7 @@ import Language from './pages/BasicAppPages/Language';
 import AboutApp from './pages/BasicAppPages/AboutApp'; 
 import HelpContact from './pages/BasicAppPages/HelpContact';
 import PrivacyPolicy from './pages/BasicAppPages/PrivacyPolicy'; 
+import NotificationScreen from './screens/NotificationScreen'; // 🟢 Added
 
 /* --- FARMER PAGES IMPORTS --- */
 import UploadProduct from './pages/FarmerPages/UploadProduct';
@@ -46,8 +48,6 @@ import PersonalInfo from './pages/BuyerPages/PersonalInfo';
 import PaymentsRefunds from './pages/BuyerPages/PaymentsRefunds';
 import RazorpayWebView from './screens/RazorpayWebView';
 
-
-
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -57,9 +57,17 @@ export default function App() {
   useEffect(() => {
     const checkUserStatus = async () => {
       try {
-        setInitialRoute('RoleSelection');
+        const userData = await AsyncStorage.getItem('userData');
+        if (userData) {
+          const parsed = JSON.parse(userData);
+          // If user is already logged in, skip RoleSelection and go to their Home
+          setInitialRoute(parsed.role === 'farmer' ? 'FarmerHome' : 'BuyerHome');
+        } else {
+          setInitialRoute('RoleSelection');
+        }
       } catch (e) {
         console.log("Error reading storage", e);
+        setInitialRoute('RoleSelection');
       } finally {
         setIsLoading(false);
       }
@@ -78,72 +86,71 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
-      
-      <NavigationContainer>
-        <Stack.Navigator 
-          initialRouteName={initialRoute}
-          screenOptions={{
-            headerShown: false,
-            animation: 'slide_from_right' 
-          }}
-        >
-          {/* --- 1. ENTRY & ROLE SELECTION --- */}
-          <Stack.Screen name="RoleSelection" component={RoleSelection} />
-
-          {/* --- 2. AUTH PAGES --- */}
-          <Stack.Screen name="FarmerSignIn" component={FarmerSignIn} />
-          <Stack.Screen name="FarmerSignUp" component={FarmerSignUp} />
-          <Stack.Screen name="BuyerSignIn" component={BuyerSignIn} />
-          <Stack.Screen name="BuyerSignUp" component={BuyerSignUp} />
-
-          {/* --- 3. MAIN DASHBOARDS (TABS) --- */}
-          <Stack.Screen name="FarmerHome" component={FarmerTabs} />
-          <Stack.Screen name="BuyerHome" component={BuyerTabs} />
-
-          {/* --- 4. FARMER ACTION PAGES --- */}
-          <Stack.Screen name="UploadProduct" component={UploadProduct} />
-          <Stack.Screen name="Stocks" component={Stocks} />
-          <Stack.Screen name="Orders" component={Orders} />
-          <Stack.Screen name="FarmerHistory" component={FarmerHistory} />
-          <Stack.Screen name="FarmerAlertNotification" component={FarmerAlertNotification} />
-          <Stack.Screen name="FarmerSearch" component={FarmerSearch} /> 
-          <Stack.Screen name="FarmerProfile" component={FarmerProfile} /> 
-          
-          {/* --- 5. BUYER ACTION PAGES --- */}
-          <Stack.Screen name="Kart" component={Kart} />
-          <Stack.Screen name="ProductDetails" component={ProductDetails} />
-          <Stack.Screen name="BuyerOrders" component={BuyerOrders} />
-          <Stack.Screen name="OrderDetails" component={OrderDetails} />
-          <Stack.Screen name="BuyerAlertNotification" component={BuyerAlertNotification} />
-          <Stack.Screen name="BuyerSearch" component={BuyerSearch} /> 
-          <Stack.Screen name="BuyerProfile" component={BuyerProfile} /> 
-          <Stack.Screen name="PlaceOrder" component={PlaceOrder} />
-          <Stack.Screen name="Payment" component={Payment} />
-          <Stack.Screen name="OrderSuccess" component={OrderSuccess} />
-          <Stack.Screen name="Wishlist" component={Wishlist} />
-          <Stack.Screen name="SavedAddresses" component={SavedAddresses} />
-          <Stack.Screen name="PersonalInfo" component={PersonalInfo} />
-          <Stack.Screen name="PaymentsRefunds" component={PaymentsRefunds} />
-
-          {/* --- ADDED RAZORPAY WEBVIEW ROUTE --- */}
-          <Stack.Screen 
-            name="RazorpayWebView" 
-            component={RazorpayWebView} 
-            options={{ 
+      <NotificationProvider>
+        <NavigationContainer>
+          <Stack.Navigator 
+            initialRouteName={initialRoute}
+            screenOptions={{
               headerShown: false,
-              gestureEnabled: false 
-            }} 
-          />
+              animation: 'slide_from_right' 
+            }}
+          >
+            {/* --- 1. ENTRY & ROLE SELECTION --- */}
+            <Stack.Screen name="RoleSelection" component={RoleSelection} />
 
-          {/* --- 6. UTILITY & MENU --- */}
-          <Stack.Screen name="AppMenu" component={AppMenu} />
-          <Stack.Screen name="Language" component={Language} />
-          <Stack.Screen name="AboutApp" component={AboutApp} />
-          <Stack.Screen name="HelpContact" component={HelpContact} />
-          <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicy} />
+            {/* --- 2. AUTH PAGES --- */}
+            <Stack.Screen name="FarmerSignIn" component={FarmerSignIn} />
+            <Stack.Screen name="FarmerSignUp" component={FarmerSignUp} />
+            <Stack.Screen name="BuyerSignIn" component={BuyerSignIn} />
+            <Stack.Screen name="BuyerSignUp" component={BuyerSignUp} />
 
-        </Stack.Navigator>
-      </NavigationContainer>
+            {/* --- 3. MAIN DASHBOARDS (TABS) --- */}
+            <Stack.Screen name="FarmerHome" component={FarmerTabs} />
+            <Stack.Screen name="BuyerHome" component={BuyerTabs} />
+
+            {/* --- 4. FARMER ACTION PAGES --- */}
+            <Stack.Screen name="UploadProduct" component={UploadProduct} />
+            <Stack.Screen name="Stocks" component={Stocks} />
+            <Stack.Screen name="Orders" component={Orders} />
+            <Stack.Screen name="FarmerHistory" component={FarmerHistory} />
+            <Stack.Screen name="FarmerAlertNotification" component={FarmerAlertNotification} />
+            <Stack.Screen name="FarmerSearch" component={FarmerSearch} /> 
+            <Stack.Screen name="FarmerProfile" component={FarmerProfile} /> 
+            
+            {/* --- 5. BUYER ACTION PAGES --- */}
+            <Stack.Screen name="Kart" component={Kart} />
+            <Stack.Screen name="ProductDetails" component={ProductDetails} />
+            <Stack.Screen name="BuyerOrders" component={BuyerOrders} />
+            <Stack.Screen name="OrderDetails" component={OrderDetails} />
+            <Stack.Screen name="BuyerAlertNotification" component={BuyerAlertNotification} />
+            <Stack.Screen name="BuyerSearch" component={BuyerSearch} /> 
+            <Stack.Screen name="BuyerProfile" component={BuyerProfile} /> 
+            <Stack.Screen name="PlaceOrder" component={PlaceOrder} />
+            <Stack.Screen name="Payment" component={Payment} />
+            <Stack.Screen name="OrderSuccess" component={OrderSuccess} />
+            <Stack.Screen name="Wishlist" component={Wishlist} />
+            <Stack.Screen name="SavedAddresses" component={SavedAddresses} />
+            <Stack.Screen name="PersonalInfo" component={PersonalInfo} />
+            <Stack.Screen name="PaymentsRefunds" component={PaymentsRefunds} />
+
+            {/* --- RAZORPAY --- */}
+            <Stack.Screen 
+              name="RazorpayWebView" 
+              component={RazorpayWebView} 
+              options={{ gestureEnabled: false }} 
+            />
+
+            {/* --- 6. UTILITY & COMMON --- */}
+            <Stack.Screen name="Notifications" component={NotificationScreen} />
+            <Stack.Screen name="AppMenu" component={AppMenu} />
+            <Stack.Screen name="Language" component={Language} />
+            <Stack.Screen name="AboutApp" component={AboutApp} />
+            <Stack.Screen name="HelpContact" component={HelpContact} />
+            <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicy} />
+
+          </Stack.Navigator>
+        </NavigationContainer>
+      </NotificationProvider>
     </SafeAreaProvider>
   );
 }

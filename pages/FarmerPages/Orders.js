@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, Text, View, FlatList, Image, TouchableOpacity, 
-  Dimensions, Alert, ActivityIndicator, Modal, Share 
+  Dimensions, Alert, ActivityIndicator, Modal, ScrollView 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import apiClient from '../../services/api';
+
+// --- RECEIPT UTILITIES ---
+import ViewShot from 'react-native-view-shot'; 
+import * as Sharing from 'expo-sharing'; 
+import * as MediaLibrary from 'expo-media-library'; 
 
 const { width, height } = Dimensions.get('window');
 const K_GREEN = '#6aaa49';
@@ -17,6 +22,8 @@ export default function Orders({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
+
+  const viewShotRef = useRef();
 
   useEffect(() => { fetchOrders(); }, []);
 
@@ -45,9 +52,24 @@ export default function Orders({ navigation }) {
     ]);
   };
 
-  const handleShareReceipt = async (order) => {
-    const message = `Kisan Marg Receipt\nOrder ID: ${order._id}\nBuyer: ${order.buyerId.name}\nProduct: ${order.product.productName}\nTotal: ₹${order.totalPrice}`;
-    await Share.share({ message });
+  // --- RECEIPT CAPTURE LOGIC ---
+  const handleCaptureAndShare = async () => {
+    try {
+      const uri = await viewShotRef.current.capture();
+      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri);
+    } catch (error) { Alert.alert("Error", "Could not share receipt."); }
+  };
+
+  const handleCaptureAndSave = async () => {
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
+      if (status === 'granted') {
+        const uri = await viewShotRef.current.capture();
+        const asset = await MediaLibrary.createAssetAsync(uri);
+        await MediaLibrary.createAlbumAsync("KisanMarg_Sales", asset, false);
+        Alert.alert("Success ✅", "Receipt saved to Gallery!");
+      }
+    } catch (error) { Alert.alert("Error", "Failed to save image."); }
   };
 
   const filteredOrders = orders.filter(order => {
@@ -137,27 +159,73 @@ export default function Orders({ navigation }) {
         />
       )}
 
-      {/* RECEIPT MODAL */}
+      {/* --- PROFESSIONAL RECEIPT MODAL --- */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Order Receipt</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}><Ionicons name="close" size={28}/></TouchableOpacity>
+              <Text style={styles.modalTitle}>Sale Receipt</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}><Ionicons name="close-circle" size={30} color="#ddd"/></TouchableOpacity>
             </View>
             
-            {selectedOrder && (
-              <View style={styles.receiptBody}>
-                <View style={styles.receiptRow}><Text>Product:</Text><Text style={{fontWeight:'bold'}}>{selectedOrder.product.productName}</Text></View>
-                <View style={styles.receiptRow}><Text>Quantity:</Text><Text>{selectedOrder.quantity}kg</Text></View>
-                <View style={styles.receiptRow}><Text>Price:</Text><Text>₹{selectedOrder.totalPrice}</Text></View>
-                <View style={styles.receiptRow}><Text>Status:</Text><Text style={{color: K_GREEN}}>{selectedOrder.status}</Text></View>
-                
-                <TouchableOpacity style={styles.shareButton} onPress={() => handleShareReceipt(selectedOrder)}>
-                  <Text style={styles.shareText}>Download & Share Receipt</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selectedOrder && (
+                <ViewShot ref={viewShotRef} options={{ format: 'jpg', quality: 1.0 }} style={{ backgroundColor: '#fff' }}>
+                  <View style={styles.receiptDetails}>
+                    {/* Header Branding */}
+                    <View style={styles.receiptHeaderRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.sellerLabel}>ORDER STATUS: {selectedOrder.status.toUpperCase()}</Text>
+                        <Text style={styles.sellerName}>Kisan Marg Sale</Text>
+                        <Text style={styles.addressValSmall}>Digitally Verified Transaction</Text>
+                      </View>
+                      <Image source={require('../../assets/App-logo-only-no-bg.png')} style={styles.receiptLogo} />
+                    </View>
+
+                    <View style={styles.receiptIDRow}>
+                       <Text style={styles.receiptLabel}>Sale ID</Text>
+                       <Text style={styles.receiptValue}>#KM-{selectedOrder._id.slice(-6).toUpperCase()}</Text>
+                    </View>
+
+                    <View style={styles.receiptDivider} />
+
+                    {/* Buyer & Info Grid */}
+                    <View style={styles.receiptInfoGrid}>
+                      <View style={styles.infoGroupFull}>
+                        <Text style={styles.infoLabel}>BUYER DETAILS</Text>
+                        <Text style={styles.infoVal}>{selectedOrder.buyerId?.name || "Customer"}</Text>
+                        <Text style={styles.addressValSmall}>{selectedOrder.buyerId?.location}</Text>
+                        <Text style={styles.addressValSmall}>Ph: {selectedOrder.buyerId?.phno}</Text>
+                      </View>
+                      
+                      <View style={styles.infoGroup}><Text style={styles.infoLabel}>DATE</Text><Text style={styles.infoVal}>{new Date(selectedOrder.createdAt).toLocaleDateString()}</Text></View>
+                      <View style={styles.infoGroup}><Text style={styles.infoLabel}>PRODUCT</Text><Text style={styles.infoVal}>{selectedOrder.product?.productName}</Text></View>
+                      <View style={styles.infoGroup}><Text style={styles.infoLabel}>QUANTITY</Text><Text style={styles.infoVal}>{selectedOrder.quantity}kg</Text></View>
+                      <View style={styles.infoGroup}><Text style={styles.infoLabel}>PAYMENT</Text><Text style={styles.infoVal}>{selectedOrder.transactionId === 'COD' ? 'CASH' : 'ONLINE'}</Text></View>
+                      <View style={styles.infoGroupFull}><Text style={styles.infoLabel}>TRANSACTION ID</Text><Text style={styles.infoVal}>{selectedOrder.transactionId}</Text></View>
+                    </View>
+
+                    <View style={styles.totalRow}>
+                      <Text style={styles.totalLabel}>Amount Earned</Text>
+                      <Text style={styles.totalValue}>₹{selectedOrder.totalPrice}</Text>
+                    </View>
+
+                    <Text style={styles.receiptFooterText}>Supporting local agriculture through Kisan Marg</Text>
+                  </View>
+                </ViewShot>
+              )}
+
+              <View style={styles.modalActionRow}>
+                <TouchableOpacity style={styles.downloadBtn} onPress={handleCaptureAndSave}>
+                  <Ionicons name="download-outline" size={20} color="#fff" />
+                  <Text style={styles.actionBtnText}> Save</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.shareBtn} onPress={handleCaptureAndShare}>
+                  <Ionicons name="share-social-outline" size={20} color={K_GREEN} />
+                  <Text style={[styles.actionBtnText, {color: K_GREEN}]}> Share</Text>
                 </TouchableOpacity>
               </View>
-            )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -190,12 +258,33 @@ const styles = StyleSheet.create({
   btnText: { fontSize: 12, fontWeight: 'bold' },
   verticalDivider: { width: 1, backgroundColor: '#f0f0f0' },
   emptyText: { textAlign: 'center', marginTop: 50, color: '#aaa' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold' },
-  receiptBody: { borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10 },
-  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 8 },
-  shareButton: { backgroundColor: K_DARK_BLUE, marginTop: 20, padding: 15, borderRadius: 12, alignItems: 'center' },
-  shareText: { color: '#fff', fontWeight: 'bold' }
+
+  // Professional Receipt Modal Styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, height: height * 0.8 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold', color: K_DARK_BLUE },
+  receiptDetails: { padding: 15, borderWidth: 1.5, borderColor: '#eee', borderStyle: 'dashed', borderRadius: 20, backgroundColor: '#fff' },
+  receiptHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', paddingBottom: 10 },
+  sellerLabel: { fontSize: 9, color: '#aaa', letterSpacing: 1, fontWeight: 'bold' },
+  sellerName: { fontSize: 16, fontWeight: 'bold', color: K_DARK_BLUE, marginTop: 2 },
+  addressValSmall: { fontSize: 11, color: '#666', marginTop: 2, lineHeight: 15 },
+  receiptLogo: { width: 40, height: 40, opacity: 0.8 },
+  receiptIDRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  receiptLabel: { color: '#888', fontSize: 12 },
+  receiptValue: { fontWeight: '700', color: K_DARK_BLUE, fontSize: 12 },
+  receiptDivider: { height: 1, backgroundColor: '#eee', marginBottom: 15 },
+  receiptInfoGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  infoGroupFull: { width: '100%', marginBottom: 15 },
+  infoGroup: { width: '48%', marginBottom: 15 },
+  infoLabel: { fontSize: 9, color: '#aaa', letterSpacing: 1, marginBottom: 4, fontWeight: 'bold' },
+  infoVal: { fontSize: 14, fontWeight: 'bold', color: K_DARK_BLUE },
+  totalRow: { backgroundColor: '#f9f9f9', padding: 15, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 5 },
+  totalLabel: { fontSize: 14, fontWeight: 'bold', color: '#666' },
+  totalValue: { fontSize: 22, fontWeight: 'bold', color: K_GREEN },
+  receiptFooterText: { textAlign: 'center', fontSize: 9, color: '#ccc', marginTop: 15, fontStyle: 'italic' },
+  modalActionRow: { flexDirection: 'row', marginTop: 20, justifyContent: 'space-between', paddingBottom: 20 },
+  downloadBtn: { backgroundColor: K_DARK_BLUE, flex: 1, height: 50, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  shareBtn: { backgroundColor: '#fff', flex: 1, height: 50, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: K_GREEN },
+  actionBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 }
 });

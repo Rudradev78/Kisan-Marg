@@ -20,7 +20,7 @@ import FarmerHistory from '../pages/FarmerPages/FarmerHistory';
 const Tab = createBottomTabNavigator();
 const K_GREEN = '#6aaa49';
 
-// --- FARMER NAVIGATION (5 Buttons) ---
+// --- FARMER NAVIGATION (Bottom Tabs) ---
 export function FarmerTabs() {
   return (
     <Tab.Navigator
@@ -46,13 +46,13 @@ export function FarmerTabs() {
       <Tab.Screen 
         name="Menu" 
         component={AppMenu} 
-        initialParams={{ userRole: 'farmer' }} // 🟢 Fixes the role in AppMenu
+        initialParams={{ userRole: 'farmer' }} 
       />
     </Tab.Navigator>
   );
 }
 
-// --- BUYER NAVIGATION (5 Buttons) ---
+// --- BUYER NAVIGATION (Bottom Tabs) ---
 export function BuyerTabs() {
   return (
     <Tab.Navigator
@@ -78,7 +78,7 @@ export function BuyerTabs() {
       <Tab.Screen 
         name="Menu" 
         component={AppMenu} 
-        initialParams={{ userRole: 'buyer' }} // 🟢 Fixes the role in AppMenu
+        initialParams={{ userRole: 'buyer' }} 
       />
     </Tab.Navigator>
   );

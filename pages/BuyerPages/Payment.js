@@ -17,9 +17,8 @@ export default function Payment({ navigation, route }) {
   const [selectedMethod, setSelectedMethod] = useState('upi');
   const [processing, setProcessing] = useState(false);
   
-  // LOGIC: Receive delivery details and amount from previous page
-  const { totalAmount, deliveryAddress, productData } = route.params || { totalAmount: 0 }; 
-
+  const { totalAmount, deliveryAddress, cartItems } = route.params;
+  
   const paymentMethods = [
     { id: 'upi', title: 'UPI (GPay, PhonePe, BHIM)', icon: 'qrcode', provider: 'MaterialCommunityIcons' },
     { id: 'card', title: 'Credit / Debit Card', icon: 'card', provider: 'Ionicons' },
@@ -27,73 +26,38 @@ export default function Payment({ navigation, route }) {
     { id: 'cod', title: 'Cash on Delivery', icon: 'hand-holding-usd', provider: 'FontAwesome5' },
   ];
 
-  const handlePayment = async () => {
-    setProcessing(true);
+const handlePayment = async () => {
+  if (!cartItems || cartItems.length === 0) {
+    Alert.alert("Error", "Your kart is empty.");
+    return;
+  }
 
-    // Common Order Data for the Database
-    const baseOrderData = {
-      product: productData?._id,
-      quantity: productData?.qty || 1,
-      totalPrice: totalAmount,
-      deliveryFee: 40, // Example
-      shippingAddress: deliveryAddress,
-    };
-
-    try {
-      if (selectedMethod === 'cod') {
-        // --- CASH ON DELIVERY FLOW ---
-        const res = await apiClient.post('/orders', { ...baseOrderData, status: 'Requested' });
-        if (res.data.success) {
-          navigation.navigate('OrderSuccess');
-        }
-      } else {
-        // --- RAZORPAY ONLINE FLOW ---
-        
-        // 1. Create Razorpay Order on Server
-        const rzpRes = await apiClient.post('/orders/razorpay', { amount: totalAmount });
-        const { order } = rzpRes.data;
-
-        // 2. Open Razorpay Checkout
-        var options = {
-          description: 'Kisan Marg - Fresh Harvest Payment',
-          image: 'https://i.imgur.com/3giU0Sg.png', // Add your logo here
-          currency: 'INR',
-          key: 'your_razorpay_key_id', // Replace with your REAL Key ID
-          amount: order.amount,
-          name: 'Kisan Marg',
-          order_id: order.id,
-          prefill: {
-            email: 'user@example.com',
-            contact: '9876543210',
-            name: 'Smruti Ranjan'
-          },
-          theme: { color: K_GREEN }
-        };
-
-        RazorpayCheckout.open(options).then(async (data) => {
-          // 3. Verify Payment on Server
-          const verifyRes = await apiClient.post('/orders/verify', {
-            razorpay_order_id: data.razorpay_order_id,
-            razorpay_payment_id: data.razorpay_payment_id,
-            razorpay_signature: data.razorpay_signature,
-            orderData: baseOrderData
-          });
-
-          if (verifyRes.data.success) {
-            navigation.navigate('OrderSuccess');
-          }
-        }).catch((error) => {
-          Alert.alert("Payment Failed", "Something went wrong with the payment. Please try again.");
-          console.log(error);
-        });
+  setProcessing(true);
+  try {
+    if (selectedMethod === 'cod') {
+      console.log("Attempting COD for items:", cartItems.length);
+      const res = await apiClient.post('/orders/bulk-cod', { cartItems });
+      
+      if (res.data.success) {
+        navigation.replace('OrderSuccess');
       }
-    } catch (err) {
-      Alert.alert("Error", "Order could not be processed.");
-      console.log(err);
-    } finally {
-      setProcessing(false);
+    } else {
+      // Razorpay logic...
+      const rzpRes = await apiClient.post('/orders/razorpay', { amount: totalAmount });
+      navigation.navigate('RazorpayWebView', {
+        rzpOrder: rzpRes.data.order,
+        cartItems: cartItems,
+        totalAmount: totalAmount
+      });
     }
-  };
+  } catch (err) {
+    // This catches the "Could not process order" error
+    console.log("Order Process Error:", err.response?.data || err.message);
+    Alert.alert("Error", err.response?.data?.message || "Could not process order.");
+  } finally {
+    setProcessing(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>

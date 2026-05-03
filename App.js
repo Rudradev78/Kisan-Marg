@@ -44,6 +44,8 @@ import Wishlist from './pages/BuyerPages/Wishlist';
 import SavedAddresses from './pages/BuyerPages/SavedAddresses';
 import PersonalInfo from './pages/BuyerPages/PersonalInfo';
 import PaymentsRefunds from './pages/BuyerPages/PaymentsRefunds';
+import RazorpayWebView from './screens/RazorpayWebView';
+
 
 
 const Stack = createNativeStackNavigator();
@@ -55,7 +57,6 @@ export default function App() {
   useEffect(() => {
     const checkUserStatus = async () => {
       try {
-        // Logic for checking login tokens would go here later
         setInitialRoute('RoleSelection');
       } catch (e) {
         console.log("Error reading storage", e);
@@ -123,6 +124,16 @@ export default function App() {
           <Stack.Screen name="SavedAddresses" component={SavedAddresses} />
           <Stack.Screen name="PersonalInfo" component={PersonalInfo} />
           <Stack.Screen name="PaymentsRefunds" component={PaymentsRefunds} />
+
+          {/* --- ADDED RAZORPAY WEBVIEW ROUTE --- */}
+          <Stack.Screen 
+            name="RazorpayWebView" 
+            component={RazorpayWebView} 
+            options={{ 
+              headerShown: false,
+              gestureEnabled: false 
+            }} 
+          />
 
           {/* --- 6. UTILITY & MENU --- */}
           <Stack.Screen name="AppMenu" component={AppMenu} />

@@ -19,7 +19,7 @@ const K_GREEN = '#6aaa49';
 const K_DARK_BLUE = '#112244';
 
 export default function PlaceOrder({ navigation, route }) {
-  const { totalAmount } = route.params || { totalAmount: 0 };
+  const { totalAmount, items } = route.params || { totalAmount: 0, items: [] };
   
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
@@ -32,6 +32,7 @@ export default function PlaceOrder({ navigation, route }) {
   const [newPhone, setNewPhone] = useState('');
   const [newHouse, setNewHouse] = useState('');
   const [newCity, setNewCity] = useState('');
+
 
   // --- FETCH ADDRESSES FROM DB ---
   useFocusEffect(
@@ -102,9 +103,11 @@ export default function PlaceOrder({ navigation, route }) {
       return;
     }
     const address = addresses.find(a => a._id === selectedAddress);
+    
     navigation.navigate('Payment', { 
         totalAmount: totalAmount,
-        deliveryAddress: address 
+        deliveryAddress: address,
+        cartItems: items // Passing the array forward
     });
   };
 

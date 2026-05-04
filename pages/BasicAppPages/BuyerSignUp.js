@@ -36,10 +36,9 @@ export default function BuyerSignUp({ navigation }) {
 
   /**
    * STEP 1: INITIALIZE SIGNUP
-   * Checks if a Buyer already exists and triggers the OTP.
+   * Requests OTP for a new Buyer account.
    */
   const handleSendOTP = async () => {
-    // Client-side Validation
     if (name.trim().length < 2) {
       Alert.alert("Input Error", "Please enter a valid name.");
       return;
@@ -63,7 +62,6 @@ export default function BuyerSignUp({ navigation }) {
       }
     } catch (error) {
       if (error.response && error.response.status === 400) {
-        // Backend returns 400 if 'isLogged' is already true for this Buyer
         Alert.alert("Account Exists", "This number is already a registered Buyer. Please Log In.");
       } else {
         Alert.alert("Error", "Could not send OTP. Please check your connection.");
@@ -75,7 +73,7 @@ export default function BuyerSignUp({ navigation }) {
 
   /**
    * STEP 2: VERIFY AND FINALIZE
-   * Verifies OTP. If successful, backend sets isLogged to true.
+   * Creates the user in the DB and establishes the token-based session.
    */
   const handleVerifyOTP = async () => {
     if (otp.length !== 6) {
@@ -92,19 +90,32 @@ export default function BuyerSignUp({ navigation }) {
       });
 
       if (response.data.success) {
-        // Store Session Locally
-        await AsyncStorage.setItem('userToken', response.data.token);
-        await AsyncStorage.setItem('userType', 'Buyer');
-        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+        // 🟢 Extract token and user details from backend response
+        const { token } = response.data;
+        const idFromDb = response.data.user.id || response.data.user._id;
+        const { userType } = response.data.user;
+
+        // 🟢 SECURE SESSION LOGIC: Store token, userId, and userType together
+        const sessionData = {
+          token: token,
+          userId: idFromDb,
+          userType: userType
+        };
+
+        // Persist to local storage for the API interceptor
+        await AsyncStorage.setItem('userData', JSON.stringify(sessionData));
+        
+        console.log("✅ New Buyer Account Created & Secured:", sessionData);
 
         Alert.alert("Welcome!", "Your Buyer account is now active.");
-        navigation.replace('BuyerHome'); 
+
+        // 🟢 NAVIGATION: Pass userId as a parameter to BuyerHome
+        navigation.replace('BuyerHome', { userId: idFromDb }); 
       }
     } catch (error) {
       const msg = error.response?.data?.message || "Invalid OTP";
 
       if (error.response?.status === 403) {
-        // 5-chance lockout rule
         Alert.alert("Account Locked", "Too many failed attempts. Please try again later.");
         navigation.replace('RoleSelection'); 
       } else {
@@ -174,7 +185,6 @@ export default function BuyerSignUp({ navigation }) {
                 selectionColor={B_ORANGE}
               />
 
-              {/* DYNAMIC OTP FIELD */}
               {isOtpSent && (
                 <View style={{marginTop: 20}}>
                   <Text style={styles.label}>6-Digit OTP</Text>

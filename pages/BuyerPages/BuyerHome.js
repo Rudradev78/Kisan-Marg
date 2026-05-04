@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, 
-  TextInput, Dimensions, StatusBar, ImageBackground, FlatList, Animated, ActivityIndicator, Alert 
+  Dimensions, StatusBar, ImageBackground, FlatList, Animated, ActivityIndicator, Alert 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,16 +9,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/api';
-import { useNotifications } from '../../context/NotificationContext';
 
 const { width } = Dimensions.get('window');
 const K_GREEN = '#6aaa49';
 const K_DARK_BLUE = '#112244';
-const K_ORANGE = '#f39c12'; 
 
-export default function BuyerHome({ navigation }) {
-
-  const { triggerPopup } = useNotifications();
+export default function BuyerHome({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [banners, setBanners] = useState([]);
   const [products, setProducts] = useState([]);
@@ -38,12 +34,12 @@ export default function BuyerHome({ navigation }) {
     { id: '4', name: 'Spices', sub: 'Oils & Spices', img: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?q=80&w=1000' },
   ];
 
-  // 1. Load static-heavy data (Banners/Market Products) only once on mount
+  // 1. Initial Market Data Fetch
   useEffect(() => {
     fetchMarketData();
   }, []);
 
-  // 2. LOGIC: Refresh both Cart and Wishlist state every time the screen is focused
+  // 2. Refresh UI elements on screen focus
   useFocusEffect(
     useCallback(() => {
       loadLocalCart();
@@ -51,45 +47,72 @@ export default function BuyerHome({ navigation }) {
     }, [])
   );
 
-  
+  const fetchMarketData = async () => {
+    try {
+      setLoading(true);
 
-const fetchMarketData = async () => {
-  try {
-    const slidersRes = await apiClient.get(`/sliders?userType=Buyer`);
+      // 🟢 Logic: Check passed param first, fallback to storage
+      const userIdFromParam = route.params?.userId;
+      const storedData = await AsyncStorage.getItem('userData');
+      const session = storedData ? JSON.parse(storedData) : null;
 
-    const allSliders = slidersRes?.data?.data || [];
-    const pos1 = allSliders.find(s => s.sliderPosition === 1);
+      const finalUserId = userIdFromParam || session?.userId;
+      const role = session?.userType || 'Buyer';
 
-    setBanners(pos1 ? pos1.sliderImages : []);
+      if (!finalUserId) {
+        console.log("No Session ID: Returning to Role Selection");
+        navigation.replace('RoleSelection');
+        return;
+      }
 
-    // products (unchanged)
-    const productRes = await apiClient.get('/products/market');
-    setProducts(productRes.data.data);
+      // Parallel API calls for speed
+      const [slidersRes, productRes, wishlistRes] = await Promise.all([
+        apiClient.get(`/sliders?userType=${role}`).catch(() => null),
+        apiClient.get('/products/market').catch(() => null),
+        apiClient.get(`/users/profile/${finalUserId}`).catch(() => null)
+      ]);
 
-  } catch (err) {
-    console.log("Error loading market data:", err);
-  } finally {
-    setLoading(false);
-  }
-};
+      // Set Banners
+      const allSliders = slidersRes?.data?.data || [];
+      const pos1 = allSliders.find(s => s.sliderPosition === 1);
+      setBanners(pos1 ? pos1.sliderImages : []);
+
+      // Set Products
+      setProducts(productRes?.data?.data || []);
+
+      // Set Initial Wishlist
+      if (wishlistRes?.data?.success) {
+        setWishlist(wishlistRes.data.user.wishlist || []);
+      }
+
+    } catch (err) {
+      console.log("Buyer Dashboard Fetch Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const refreshUserWishlist = async () => {
     try {
-      const userRes = await apiClient.get('/auth/stats');
-      setWishlist(userRes.data.user.wishlist || []);
+      const userIdFromParam = route.params?.userId;
+      const storedData = await AsyncStorage.getItem('userData');
+      const session = storedData ? JSON.parse(storedData) : null;
+      
+      const finalUserId = userIdFromParam || session?.userId;
+
+      if (finalUserId) {
+        const res = await apiClient.get(`/users/profile/${finalUserId}`);
+        setWishlist(res.data.user.wishlist || []);
+      }
     } catch (err) {
-      console.log("Wishlist refresh error:", err);
+      console.log("Wishlist Sync Error:", err);
     }
   };
 
   const loadLocalCart = async () => {
     try {
       const storedCart = await AsyncStorage.getItem('kart');
-      if (storedCart) {
-        setCart(JSON.parse(storedCart));
-      } else {
-        setCart([]);
-      }
+      setCart(storedCart ? JSON.parse(storedCart) : []);
     } catch (err) {
       console.log("Cart load error:", err);
     }
@@ -100,7 +123,6 @@ const fetchMarketData = async () => {
       const res = await apiClient.post(`/auth/wishlist/${id}`);
       setWishlist(res.data.wishlist);
       
-      // Show toast only when adding
       if (!wishlist.includes(id)) {
         setShowToast(true);
         Animated.timing(toastFadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -133,23 +155,16 @@ const fetchMarketData = async () => {
     }
   };
 
-  // Auto-Slider Logic
-useEffect(() => {
-  if (banners.length === 0) return;
-
-  const interval = setInterval(() => {
-    const nextIndex = (activeIndex + 1) % banners.length;
-
-    flatListRef.current?.scrollToIndex({
-      index: nextIndex,
-      animated: true,
-    });
-
-    setActiveIndex(nextIndex);
-  }, 4000);
-
-  return () => clearInterval(interval);
-}, [activeIndex, banners.length]);
+  // Auto-Slider Timing
+  useEffect(() => {
+    if (banners.length === 0) return;
+    const interval = setInterval(() => {
+      const nextIndex = (activeIndex + 1) % banners.length;
+      flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+      setActiveIndex(nextIndex);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [activeIndex, banners.length]);
 
   if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={K_GREEN}/></View>;
 
@@ -184,48 +199,22 @@ useEffect(() => {
           <Text style={{marginLeft: 10, color: '#bbb'}}>Search fresh harvest...</Text>
         </TouchableOpacity>
 
-        {/* SLIDER */}
         <FlatList
           ref={flatListRef}
           data={banners}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-
-          initialScrollIndex={0}
-          onScrollToIndexFailed={(info) => {
-            setTimeout(() => {
-              flatListRef.current?.scrollToIndex({
-                index: info.index,
-                animated: true,
-              });
-            }, 500);
-          }}
-
-            onMomentumScrollEnd={(e) => {
+          keyExtractor={(item) => item._id}
+          getItemLayout={(data, index) => ({ length: width, offset: width * index, index })}
+          onMomentumScrollEnd={(e) => {
             const index = Math.round(e.nativeEvent.contentOffset.x / width);
             setActiveIndex(index);
           }}
-
-          getItemLayout={(data, index) => ({
-            length: width,
-            offset: width * index,
-            index,
-          })}
-
-          keyExtractor={(item) => item._id}
-
           renderItem={({ item }) => (
             <View style={styles.bannerWrapper}>
-              <ImageBackground
-                source={{ uri: item.imgurl }}
-                style={styles.bannerImg}
-                imageStyle={{ borderRadius: 25 }}
-              >
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.8)']}
-                  style={styles.bannerOverlay}
-                >
+              <ImageBackground source={{ uri: item.imgurl }} style={styles.bannerImg} imageStyle={{ borderRadius: 25 }}>
+                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.bannerOverlay}>
                   <Text style={styles.bannerTitle}>{item.title}</Text>
                 </LinearGradient>
               </ImageBackground>
@@ -233,19 +222,11 @@ useEffect(() => {
           )}
         />
 
-        <TouchableOpacity 
-          onPress={() => triggerPopup({ title: 'Test', message: 'Hello Partner!' })}
-          style={{ padding: 20, backgroundColor: 'red', marginTop: 100 }}
-        >
-          <Text>TEST POPUP</Text>
-        </TouchableOpacity>
-
         <View style={styles.sectionHeaderContainer}>
             <Text style={styles.sectionTitle}>Availables near you</Text>
             <View style={styles.headerUnderline} />
         </View>
 
-        {/* GRID (Includes Refreshed Wishlist Hearts) */}
         <View style={styles.grid}>
           {products.map((p) => {
             const isFav = wishlist.includes(p._id);
@@ -287,7 +268,6 @@ useEffect(() => {
         </ScrollView>
       </ScrollView>
 
-      {/* FLOATING CART (Refreshes on Focus) */}
       {cart.length > 0 && (
         <TouchableOpacity style={styles.floatingCart} onPress={() => navigation.navigate('Kart')}>
           <LinearGradient colors={[K_DARK_BLUE, '#1c3a6e']} style={styles.floatingContent}>
@@ -345,22 +325,20 @@ const styles = StyleSheet.create({
   catOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 15, justifyContent: 'center', padding: 10 },
   catMainName: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   catSubName: { color: '#eee', fontSize: 10 },
-  bannerContainer: { marginTop: 20, alignItems: 'center' },
-  bannerWrapper: { width: width, paddingHorizontal: 15, marginTop: 20, },
+  bannerWrapper: { width: width, paddingHorizontal: 15, marginTop: 20 },
   bannerImg: { width: width - 30, height: 260, justifyContent: 'flex-end', overflow: 'hidden' },
   bannerOverlay: { padding: 25, borderRadius: 25, height: '100%', justifyContent: 'flex-end' },
   bannerTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
   floatingCart: { position: 'absolute', bottom: 20, left: 15, right: 15 },
   floatingContent: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, borderRadius: 15 },
-  floatingTitle: { color: '#fff', fontWeight: 'bold' },
-  viewKartRow: { flexDirection: 'row', alignItems: 'center' },
-  viewKartText: { color: '#fff', marginRight: 5 },
-  wishlistToast: { position: 'absolute', bottom: 10, left: 0, right: 0, alignItems: 'center', zIndex: 100 },
-  toastInner: { backgroundColor: '#fff', paddingHorizontal: 25, paddingVertical: 15, borderRadius: 30, flexDirection: 'row', alignItems: 'center', elevation: 15, borderWidth: 1, borderColor: '#f0f0f0' },
-  wishlistToastText: { color: K_DARK_BLUE, fontWeight: 'bold', marginLeft: 10, fontSize: 14 },
   cartInfo: { flexDirection: 'row', alignItems: 'center' },
   cartIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
   badge: { position: 'absolute', top: -5, right: -5, backgroundColor: K_GREEN, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: 'bold' },
   floatingTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', marginLeft: 12 },
+  viewKartRow: { flexDirection: 'row', alignItems: 'center' },
+  viewKartText: { color: '#fff', marginRight: 5 },
+  wishlistToast: { position: 'absolute', bottom: 10, left: 0, right: 0, alignItems: 'center', zIndex: 100 },
+  toastInner: { backgroundColor: '#fff', paddingHorizontal: 25, paddingVertical: 15, borderRadius: 30, flexDirection: 'row', alignItems: 'center', elevation: 15, borderWidth: 1, borderColor: '#f0f0f0' },
+  wishlistToastText: { color: K_DARK_BLUE, fontWeight: 'bold', marginLeft: 10, fontSize: 14 },
 });

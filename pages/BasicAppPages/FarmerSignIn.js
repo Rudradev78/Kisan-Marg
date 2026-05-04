@@ -33,7 +33,6 @@ export default function FarmerSignIn({ navigation }) {
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // STEP 1: Request OTP from Backend
   const requestOTP = async () => {
     if (phone.length !== 10) {
       Alert.alert("Invalid Number", "Please enter a 10-digit phone number.");
@@ -44,12 +43,12 @@ export default function FarmerSignIn({ navigation }) {
     try {
       const response = await apiClient.post('/auth/login', {
         phno: phone,
-        userType: 'Farmer' // Backend uses this to find the Farmer account
+        userType: 'Farmer' 
       });
 
       if (response.data.success) {
         setIsOtpSent(true);
-        Alert.alert("Success", "OTP has been sent. Check your phone or server logs.");
+        Alert.alert("Success", "OTP has been sent to your phone.");
       }
     } catch (error) {
       const errorMsg = error.response?.data?.message || "No account found. Please Sign Up first.";
@@ -59,7 +58,6 @@ export default function FarmerSignIn({ navigation }) {
     }
   };
 
-  // STEP 2: Verify OTP and Save Session
   const verifyOTP = async () => {
     if (otp.length !== 6) {
       Alert.alert("Invalid OTP", "Please enter the 6-digit code.");
@@ -68,7 +66,6 @@ export default function FarmerSignIn({ navigation }) {
 
     setIsLoading(true);
     try {
-      // CRITICAL FIX: We must pass userType here so backend can find the Farmer record
       const response = await apiClient.post('/auth/verify', {
         phno: phone,
         otp: otp,
@@ -76,13 +73,26 @@ export default function FarmerSignIn({ navigation }) {
       });
 
       if (response.data.success) {
-        await AsyncStorage.setItem('userToken', response.data.token);
-        await AsyncStorage.setItem('userType', 'Farmer');
-        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+        // 🟢 Capture correct ID and Token from the response
+        const idFromDb = response.data.user.id || response.data.user._id;
+        const { token } = response.data;
+        const { userType } = response.data.user;
 
-        // Navigate to Home
-        navigation.replace('FarmerHome');
+        // 🟢 SAVE SESSION: Include the token so 'apiClient' can use it
+        const sessionData = {
+          token: token,
+          userId: idFromDb,
+          userType: userType
+        };
+
+        await AsyncStorage.setItem('userData', JSON.stringify(sessionData));
+        
+        console.log("✅ Farmer Session Secured:", sessionData);
+
+        // Navigate with params as a backup
+        navigation.replace('FarmerHome', { userId: idFromDb });
       }
+
     } catch (error) {
       const errorMsg = error.response?.data?.message || "Invalid OTP";
       Alert.alert("Verification Failed", errorMsg);
@@ -156,6 +166,7 @@ export default function FarmerSignIn({ navigation }) {
                     onChangeText={setOtp}
                     editable={!isLoading}
                     selectionColor={K_GREEN}
+                    autoFocus={true}
                   />
                 </View>
               )}

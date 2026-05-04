@@ -36,7 +36,7 @@ export default function FarmerSignUp({ navigation }) {
 
   /**
    * STEP 1: INITIALIZE SIGNUP
-   * Checks if user exists and sends OTP.
+   * Sends name and phone to request an OTP.
    */
   const handleSendOTP = async () => {
     if (name.trim().length < 3) {
@@ -52,18 +52,17 @@ export default function FarmerSignUp({ navigation }) {
     try {
       const response = await apiClient.post('/auth/login', {
         phno: phone,
-        name: name, // Sending name tells backend this is a signup attempt
+        name: name, // Name signals to the backend that this is a registration attempt
         userType: 'Farmer'
       });
 
       if (response.data.success) {
         setIsOtpSent(true);
-        Alert.alert("OTP Sent", "Please check your SMS or Render logs for the 6-digit code.");
+        Alert.alert("OTP Sent", "A verification code has been sent to your phone.");
       }
     } catch (error) {
       if (error.response && error.response.status === 400) {
-        // Backend logic: If User.findOne finds a verified user, it returns 400
-        Alert.alert("Account Exists", "This number is already a registered Farmer. Please Sign In.");
+        Alert.alert("Account Exists", "This number is already registered as a Farmer. Please Sign In.");
       } else {
         Alert.alert("Error", "Could not send OTP. Please try again.");
       }
@@ -74,7 +73,7 @@ export default function FarmerSignUp({ navigation }) {
 
   /**
    * STEP 2: VERIFY AND CREATE ACCOUNT
-   * Verifies OTP and officially creates the user.
+   * Finalizes the account creation and saves the session.
    */
   const handleVerifyOTP = async () => {
     if (otp.length !== 6) {
@@ -91,21 +90,33 @@ export default function FarmerSignUp({ navigation }) {
       });
 
       if (response.data.success) {
-        // Save Session
-        await AsyncStorage.setItem('userToken', response.data.token);
-        await AsyncStorage.setItem('userType', 'Farmer');
-        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+        // 🟢 Extract token and user details from response
+        const { token } = response.data;
+        const idFromDb = response.data.user._id || response.data.user.id;
+        const { userType } = response.data.user;
+
+        // 🟢 UNIFIED SAVING LOGIC: Store token, userId, and userType
+        const sessionData = {
+          token: token,
+          userId: idFromDb,
+          userType: userType
+        };
+
+        await AsyncStorage.setItem('userData', JSON.stringify(sessionData));
+        
+        console.log("✅ New Farmer Account Created & Secured:", sessionData);
 
         Alert.alert("Success", "Account created successfully!");
-        navigation.replace('FarmerHome');
+
+        // 🟢 NAVIGATION: Pass userId as a parameter to FarmerHome
+        navigation.replace('FarmerHome', { userId: idFromDb });
       }
     } catch (error) {
       const msg = error.response?.data?.message || "Invalid OTP";
       
-      // If backend returns 403 (Too many attempts), the alert matches your request
       if (error.response?.status === 403) {
         Alert.alert("Locked", "Too many incorrect attempts. Please try again later.");
-        navigation.replace('RoleSelection'); // Reset for security
+        navigation.replace('RoleSelection'); 
       } else {
         Alert.alert("Verification Failed", msg);
       }
@@ -151,7 +162,6 @@ export default function FarmerSignUp({ navigation }) {
             </View>
 
             <View style={styles.formContainer}>
-              {/* These fields become read-only once OTP is sent */}
               <Text style={styles.label}>Full Name</Text>
               <TextInput 
                 style={[styles.input, isOtpSent && styles.disabledInput]} 
@@ -159,6 +169,7 @@ export default function FarmerSignUp({ navigation }) {
                 value={name}
                 onChangeText={setName}
                 editable={!isOtpSent && !isLoading}
+                selectionColor={K_GREEN}
               />
 
               <Text style={[styles.label, {marginTop: 20}]}>Mobile Number</Text>
@@ -170,9 +181,9 @@ export default function FarmerSignUp({ navigation }) {
                 value={phone}
                 onChangeText={setPhone}
                 editable={!isOtpSent && !isLoading}
+                selectionColor={K_GREEN}
               />
 
-              {/* NEW OTP FIELD: Appears only after handleSendOTP is successful */}
               {isOtpSent && (
                 <View style={{marginTop: 20}}>
                   <Text style={styles.label}>Enter 6-Digit OTP</Text>

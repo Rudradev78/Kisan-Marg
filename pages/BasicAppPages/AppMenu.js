@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -7,26 +7,44 @@ import {
   TextInput, 
   ScrollView, 
   Alert,
-  StatusBar
+  StatusBar,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const K_GREEN = '#6aaa49';
 const K_DARK_BLUE = '#112244';
 
 export default function AppMenu({ navigation, route }) {
-  // 🟢 LOGIC: Extract role. Default to 'buyer' only if absolutely nothing is passed.
-  const { userRole } = route.params || { userRole: 'buyer' };
+  const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState('Buyer');
 
-  // 🟢 DYNAMIC MENU: We define this INSIDE the component so it knows the userRole
+  // Load the current role from session if not provided in params
+  useEffect(() => {
+    const checkRole = async () => {
+      try {
+        const session = await AsyncStorage.getItem('userData');
+        if (session) {
+          const { userType } = JSON.parse(session);
+          setRole(userType || route.params?.userRole || 'Buyer');
+        }
+      } catch (e) {
+        console.log("Error loading role:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkRole();
+  }, []);
+
   const menuOptions = [
     { 
       id: '1', 
       title: 'Profile', 
       icon: 'person-outline', 
-      // Navigates to the correct profile based on role
-      target: userRole === 'farmer' ? 'FarmerProfile' : 'BuyerProfile' 
+      target: role.toLowerCase() === 'farmer' ? 'FarmerProfile' : 'BuyerProfile' 
     },
     { id: '2', title: 'Language', icon: 'language-outline', target: 'Language' },
     { id: '3', title: 'About Kisan Marg', icon: 'leaf-outline', target: 'AboutApp' },
@@ -34,37 +52,56 @@ export default function AppMenu({ navigation, route }) {
   ];
 
   const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      { 
-        text: "Logout", 
-        style: "destructive", 
-        onPress: () => navigation.reset({ index: 0, routes: [{ name: 'RoleSelection' }] }) 
-      }
-    ]);
+    Alert.alert(
+      "Logout", 
+      "Are you sure you want to logout? Your active session will be cleared.", 
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Logout", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              // 🟢 ERASING THE UNIFIED SESSION
+              await AsyncStorage.removeItem('userData');
+              
+              console.log("✅ Session Terminated. Redirecting...");
+
+              // 🟢 RESET NAVIGATION: Clears history so user cannot click 'back' to return to Home
+              navigation.reset({ 
+                index: 0, 
+                routes: [{ name: 'RoleSelection' }] 
+              });
+            } catch (error) {
+              Alert.alert("Error", "Logout failed. Please try again.");
+            }
+          } 
+        }
+      ]
+    );
   };
+
+  if (loading) return <View style={styles.loader}><ActivityIndicator color={K_GREEN} /></View>;
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       
-      {/* --- HEADER --- */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={K_DARK_BLUE} />
         </TouchableOpacity>
         <View style={{ alignItems: 'center' }}>
           <Text style={styles.headerTitle}>Settings</Text>
-          {/* 🟢 DYNAMIC BADGE: Changes color and text based on role */}
           <View style={[
             styles.roleBadge, 
-            userRole === 'farmer' ? { backgroundColor: '#e3f2fd' } : { backgroundColor: '#f0f9eb' }
+            role.toLowerCase() === 'farmer' ? { backgroundColor: '#e3f2fd' } : { backgroundColor: '#f0f9eb' }
           ]}>
             <Text style={[
               styles.roleText, 
-              userRole === 'farmer' ? { color: '#2196f3' } : { color: K_GREEN }
+              role.toLowerCase() === 'farmer' ? { color: '#2196f3' } : { color: K_GREEN }
             ]}>
-              {userRole.toUpperCase()} ACCOUNT
+              {role.toUpperCase()} ACCOUNT
             </Text>
           </View>
         </View>
@@ -73,7 +110,6 @@ export default function AppMenu({ navigation, route }) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
-        {/* --- SEARCH --- */}
         <View style={styles.searchContainer}>
           <Ionicons name="search-outline" size={20} color="#999" />
           <TextInput 
@@ -83,7 +119,6 @@ export default function AppMenu({ navigation, route }) {
           />
         </View>
 
-        {/* --- MENU LIST --- */}
         <View style={styles.menuList}>
           {menuOptions.map((item) => (
             <TouchableOpacity 
@@ -94,18 +129,18 @@ export default function AppMenu({ navigation, route }) {
             >
               <View style={[
                 styles.iconWrapper, 
-                userRole === 'farmer' && item.id === '1' ? { backgroundColor: '#e3f2fd' } : null
+                role.toLowerCase() === 'farmer' && item.id === '1' ? { backgroundColor: '#e3f2fd' } : null
               ]}>
                 <Ionicons 
                   name={item.icon} 
                   size={22} 
-                  color={userRole === 'farmer' && item.id === '1' ? '#2196f3' : K_GREEN} 
+                  color={role.toLowerCase() === 'farmer' && item.id === '1' ? '#2196f3' : K_GREEN} 
                 />
               </View>
               <View style={styles.textWrapper}>
                 <Text style={styles.menuText}>{item.title}</Text>
                 {item.id === '1' && (
-                  <Text style={styles.subText}>Manage your {userRole} details</Text>
+                  <Text style={styles.subText}>Manage your {role.toLowerCase()} details</Text>
                 )}
               </View>
               <Ionicons name="chevron-forward" size={18} color="#ddd" />
@@ -134,6 +169,7 @@ export default function AppMenu({ navigation, route }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
+  loader: { flex: 1, justifyContent: 'center' },
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -144,12 +180,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f9f9f9'
   },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: K_DARK_BLUE },
-  roleBadge: { 
-    paddingHorizontal: 8, 
-    paddingVertical: 2, 
-    borderRadius: 6, 
-    marginTop: 2
-  },
+  roleBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginTop: 2 },
   roleText: { fontSize: 9, fontWeight: 'bold', letterSpacing: 0.5 },
   backBtn: { padding: 5 },
   scrollContent: { paddingHorizontal: 25, paddingTop: 20 },
@@ -166,22 +197,8 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, marginLeft: 10, fontSize: 16, color: K_DARK_BLUE },
   menuList: { marginBottom: 10 },
-  menuItem: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: 18, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#fcfcfc' 
-  },
-  iconWrapper: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 12, 
-    backgroundColor: '#f0f9eb', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginRight: 15 
-  },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#fcfcfc' },
+  iconWrapper: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#f0f9eb', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
   textWrapper: { flex: 1 },
   menuText: { fontSize: 16, fontWeight: '600', color: K_DARK_BLUE },
   subText: { fontSize: 12, color: '#aaa', marginTop: 2 },

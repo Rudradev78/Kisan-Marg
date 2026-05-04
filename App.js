@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, View, StyleSheet, StatusBar } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React from 'react';
+import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -10,6 +9,9 @@ import { NotificationProvider } from './context/NotificationContext';
 import { FarmerTabs, BuyerTabs } from './navigation/AppNavigator';
 
 /* --- BASIC APP PAGES IMPORTS --- */
+import SplashScreen from './pages/BasicAppPages/SplashScreen';
+import NetworkError from './pages/BasicAppPages/NetworkError';
+import GeneralError from './pages/BasicAppPages/GeneralError';
 import RoleSelection from './pages/BasicAppPages/RoleSelection';
 import FarmerSignIn from './pages/BasicAppPages/FarmerSignIn';
 import FarmerSignUp from './pages/BasicAppPages/FarmerSignUp';
@@ -20,7 +22,7 @@ import Language from './pages/BasicAppPages/Language';
 import AboutApp from './pages/BasicAppPages/AboutApp'; 
 import HelpContact from './pages/BasicAppPages/HelpContact';
 import PrivacyPolicy from './pages/BasicAppPages/PrivacyPolicy'; 
-import NotificationScreen from './screens/NotificationScreen'; // 🟢 Added
+import NotificationScreen from './screens/NotificationScreen'; 
 
 /* --- FARMER PAGES IMPORTS --- */
 import UploadProduct from './pages/FarmerPages/UploadProduct';
@@ -51,37 +53,8 @@ import RazorpayWebView from './screens/RazorpayWebView';
 const Stack = createNativeStackNavigator();
 
 export default function App() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [initialRoute, setInitialRoute] = useState('RoleSelection');
-
-  useEffect(() => {
-    const checkUserStatus = async () => {
-      try {
-        const userData = await AsyncStorage.getItem('userData');
-        if (userData) {
-          const parsed = JSON.parse(userData);
-          // If user is already logged in, skip RoleSelection and go to their Home
-          setInitialRoute(parsed.role === 'farmer' ? 'FarmerHome' : 'BuyerHome');
-        } else {
-          setInitialRoute('RoleSelection');
-        }
-      } catch (e) {
-        console.log("Error reading storage", e);
-        setInitialRoute('RoleSelection');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    checkUserStatus();
-  }, []);
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6aaa49" />
-      </View>
-    );
-  }
+  // Logic removed from here because SplashScreen now handles 
+  // the network check and storage fetching!
 
   return (
     <SafeAreaProvider>
@@ -89,13 +62,16 @@ export default function App() {
       <NotificationProvider>
         <NavigationContainer>
           <Stack.Navigator 
-            initialRouteName={initialRoute}
+            initialRouteName="Splash" // 🟢 Use a string "Splash" here
             screenOptions={{
               headerShown: false,
               animation: 'slide_from_right' 
             }}
           >
             {/* --- 1. ENTRY & ROLE SELECTION --- */}
+            <Stack.Screen name="Splash" component={SplashScreen} />
+            <Stack.Screen name="NetworkError" component={NetworkError} />
+            <Stack.Screen name="GeneralError" component={GeneralError} />
             <Stack.Screen name="RoleSelection" component={RoleSelection} />
 
             {/* --- 2. AUTH PAGES --- */}
@@ -154,12 +130,3 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-});

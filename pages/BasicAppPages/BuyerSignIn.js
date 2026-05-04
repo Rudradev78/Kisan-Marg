@@ -42,7 +42,6 @@ export default function BuyerSignIn({ navigation }) {
 
     setIsLoading(true);
     try {
-      // Note: We don't send 'name' here, so backend knows it is a Sign In attempt
       const response = await apiClient.post('/auth/login', {
         phno: phone,
         userType: 'Buyer'
@@ -53,7 +52,6 @@ export default function BuyerSignIn({ navigation }) {
         Alert.alert("OTP Sent", "A verification code has been sent to your phone.");
       }
     } catch (error) {
-      // Handle "No Account Found" (404)
       if (error.response && error.response.status === 404) {
         Alert.alert(
           "Account Not Found",
@@ -71,7 +69,7 @@ export default function BuyerSignIn({ navigation }) {
     }
   };
 
-  // STEP 2: Verify OTP and Save Session
+  // STEP 2: Verify OTP, Save Session (with Token), and Navigate
   const verifyOTP = async () => {
     if (otp.length !== 6) {
       Alert.alert("Invalid OTP", "Please enter the 6-digit code.");
@@ -87,12 +85,25 @@ export default function BuyerSignIn({ navigation }) {
       });
 
       if (response.data.success) {
-        // Securely store the JWT and user role
-        await AsyncStorage.setItem('userToken', response.data.token);
-        await AsyncStorage.setItem('userType', 'Buyer');
-        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+        // 🟢 Extract token and user details from response
+        const { token } = response.data;
+        const idFromDb = response.data.user.id || response.data.user._id;
+        const { userType } = response.data.user;
 
-        navigation.replace('BuyerHome'); 
+        // 🟢 Store comprehensive session data
+        const sessionData = {
+          token: token,
+          userId: idFromDb,
+          userType: userType
+        };
+
+        console.log("✅ Buyer Session Secured:", sessionData);
+
+        // Save to local storage for the Splash Screen and API Interceptor
+        await AsyncStorage.setItem('userData', JSON.stringify(sessionData));
+        
+        // Navigate immediately with the ID as a backup param
+        navigation.replace('BuyerHome', { userId: idFromDb });
       }
     } catch (error) {
       Alert.alert("Verification Failed", error.response?.data?.message || "Invalid OTP");
@@ -137,7 +148,7 @@ export default function BuyerSignIn({ navigation }) {
                 onPress={() => navigation.replace('RoleSelection')}
               >
                 <Ionicons name="swap-horizontal" size={18} color={B_ORANGE} />
-                <Text style={styles.changeRoleBtnText}>Change Role</Text>
+                <Text style={styles.changeRoleBtnText}>Role</Text>
               </TouchableOpacity>
             </View>
 
@@ -166,6 +177,7 @@ export default function BuyerSignIn({ navigation }) {
                     onChangeText={setOtp}
                     editable={!isLoading}
                     selectionColor={B_ORANGE}
+                    autoFocus={true}
                   />
                 </View>
               )}

@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  StyleSheet, Text, View, FlatList, Image, TouchableOpacity, 
-  Dimensions, Modal, TextInput, Alert, ActivityIndicator, ScrollView 
+  StyleSheet, 
+  Text, 
+  View, 
+  FlatList, 
+  Image, 
+  TouchableOpacity, 
+  Dimensions, 
+  Modal, 
+  TextInput, 
+  Alert, 
+  ActivityIndicator, 
+  ScrollView,
+  StatusBar // 🟢 Added to prevent ReferenceError
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,10 +38,19 @@ export default function Stocks({ navigation }) {
 
   const fetchStocks = async () => {
     try {
+      setLoading(true);
+      // 🟢 The token is now automatically handled by the interceptor in api.js
+      // The backend extracts the Farmer ID from the token, so we just call '/farmer'
       const response = await apiClient.get('/products/farmer');
       setStocks(response.data.data);
     } catch (error) {
-      console.error(error);
+      console.log("Stock Fetch Error:", error.message);
+      
+      // 🟢 Redirect to login if the session has expired (401 error)
+      if (error.response?.status === 401) {
+        Alert.alert("Session Expired", "Please login again.");
+        navigation.replace('RoleSelection');
+      }
     } finally {
       setLoading(false);
     }
@@ -58,6 +78,11 @@ export default function Stocks({ navigation }) {
   };
 
   const handleUpdate = async () => {
+    if (!selectedProduct.productName || !selectedProduct.availableQuantity) {
+      Alert.alert("Validation Error", "Fields cannot be empty.");
+      return;
+    }
+
     setEditLoading(true);
     try {
       await apiClient.put(`/products/${selectedProduct._id}`, {
@@ -82,12 +107,12 @@ export default function Stocks({ navigation }) {
           <Text style={styles.productName}>{item.productName}</Text>
           <View style={styles.priceRow}>
             <Text style={styles.priceText}>₹{item.pricePerUnit}/{item.unitGiven}</Text>
-            <Text style={styles.availableText}>{item.availableQuantity}{item.unitGiven} left</Text>
+            <Text style={styles.availableText}>{item.availableQuantity} {item.unitGiven} left</Text>
           </View>
           <View style={styles.statsRow}>
-            <Text style={styles.statLabel}>{item.noOfOrders} orders</Text>
+            <Text style={styles.statLabel}>{item.noOfOrders || 0} orders</Text>
             <View style={styles.ratingBox}>
-               <Text style={styles.ratingText}>{item.rating}</Text>
+               <Text style={styles.ratingText}>{item.rating || '0.0'}</Text>
                <Ionicons name="star" size={12} color="#FFD700" />
             </View>
           </View>
@@ -110,11 +135,12 @@ export default function Stocks({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={K_DARK_BLUE} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Inventory (Stocks)</Text>
+        <Text style={styles.headerTitle}>My Inventory</Text>
         <TouchableOpacity onPress={() => fetchStocks()}>
           <Ionicons name="refresh" size={24} color={K_DARK_BLUE} />
         </TouchableOpacity>
@@ -128,7 +154,18 @@ export default function Stocks({ navigation }) {
           keyExtractor={item => item._id}
           renderItem={renderStockCard}
           contentContainerStyle={styles.listPadding}
-          ListEmptyComponent={<Text style={styles.emptyText}>No products listed yet.</Text>}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="cube-outline" size={80} color="#ddd" />
+              <Text style={styles.emptyText}>No products listed yet.</Text>
+              <TouchableOpacity 
+                style={styles.emptyAddBtn} 
+                onPress={() => navigation.navigate('UploadProduct')}
+              >
+                <Text style={{color: '#fff', fontWeight: 'bold'}}>Add First Product</Text>
+              </TouchableOpacity>
+            </View>
+          }
         />
       )}
 
@@ -227,7 +264,9 @@ const styles = StyleSheet.create({
   btnText: { fontWeight: 'bold', fontSize: 13 },
   verticalDivider: { width: 1, backgroundColor: '#f0f0f0' },
   fab: { position: 'absolute', bottom: 30, right: 25, backgroundColor: K_GREEN, width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 8 },
-  emptyText: { textAlign: 'center', marginTop: 50, color: '#aaa' },
+  emptyContainer: { alignItems: 'center', marginTop: 100 },
+  emptyText: { textAlign: 'center', marginTop: 20, color: '#aaa', fontSize: 16 },
+  emptyAddBtn: { backgroundColor: K_GREEN, paddingHorizontal: 25, paddingVertical: 12, borderRadius: 25, marginTop: 20 },
 
   // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },

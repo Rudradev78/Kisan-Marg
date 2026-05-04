@@ -27,13 +27,6 @@ export default function BuyerHome({ navigation, route }) {
   const [showToast, setShowToast] = useState(false);
   const toastFadeAnim = useRef(new Animated.Value(0)).current;
 
-  const categories = [
-    { id: '1', name: 'Veggie', sub: 'Vegetables', img: 'https://images.unsplash.com/photo-1597362860722-39402c01edbb?q=80&w=1000' },
-    { id: '2', name: 'Fruits', sub: 'Fresh Fruits', img: 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?q=80&w=1000' },
-    { id: '3', name: 'Grains', sub: 'Pulses & more', img: 'https://images.unsplash.com/photo-1508013861974-9f6347163835?q=80&w=1000' }, 
-    { id: '4', name: 'Spices', sub: 'Oils & Spices', img: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?q=80&w=1000' },
-  ];
-
   // 1. Initial Market Data Fetch
   useEffect(() => {
     fetchMarketData();
@@ -252,20 +245,6 @@ export default function BuyerHome({ navigation, route }) {
             )
           })}
         </View>
-
-        <View style={styles.sectionHeaderContainer}><Text style={styles.sectionTitle}>Seasonal Extra</Text></View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScroll}>
-          {categories.map(cat => (
-            <TouchableOpacity key={cat.id} style={styles.catCard}>
-              <ImageBackground source={{ uri: cat.img }} style={styles.catBg} imageStyle={{borderRadius: 15}}>
-                <View style={styles.catOverlay}>
-                  <Text style={styles.catMainName}>{cat.name}</Text>
-                  <Text style={styles.catSubName}>{cat.sub}</Text>
-                </View>
-              </ImageBackground>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
       </ScrollView>
 
       {cart.length > 0 && (

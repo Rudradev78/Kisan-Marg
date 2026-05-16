@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/api';
+import { useNotifications } from '../../context/NotificationContext';
 
 const { width } = Dimensions.get('window');
 const K_GREEN = '#6aaa49';
@@ -22,7 +23,7 @@ export default function BuyerHome({ navigation, route }) {
   const [cart, setCart] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef(null);
-
+  const { startNotificationService } = useNotifications();
   // Animation for Wishlist Toast
   const [showToast, setShowToast] = useState(false);
   const toastFadeAnim = useRef(new Animated.Value(0)).current;
@@ -30,6 +31,7 @@ export default function BuyerHome({ navigation, route }) {
   // 1. Initial Market Data Fetch
   useEffect(() => {
     fetchMarketData();
+    startNotificationService();
   }, []);
 
   // 2. Refresh UI elements on screen focus

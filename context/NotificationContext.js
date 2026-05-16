@@ -8,30 +8,45 @@ const NotificationContext = createContext();
 export const NotificationProvider = ({ children }) => {
   const [currentNotif, setCurrentNotif] = useState(null);
   const [visible, setVisible] = useState(false);
+  const [isReady, setIsReady] = useState(false); // 🟢 Gate to prevent splash screen popups
   
-  // Timer Reference to prevent the "flicker" glitch
   const hideTimerRef = useRef(null);
+  const displayedNotifIds = useRef(new Set());
 
   // Animation Values
   const translateY = useRef(new Animated.Value(-200)).current; 
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
-  // Poll for notifications every 10 seconds
+  // 🟢 Public function to be triggered only when main app dashboards mount
+  const startNotificationService = () => {
+    setIsReady(true);
+  };
+
+  // Poll for notifications every 10 seconds ONLY when the system is declared ready
   useEffect(() => {
+    if (!isReady) return;
+
+    // Run an immediate check when entering dashboards
+    checkForNewNotifications();
+
     const interval = setInterval(() => {
       checkForNewNotifications();
     }, 10000);
+
     return () => clearInterval(interval);
-  }, [currentNotif]); // Re-run effect if currentNotif changes to avoid stale checks
+  }, [isReady]); 
 
   const checkForNewNotifications = async () => {
     try {
       const res = await apiClient.get('/notifications');
-      const unread = res.data.data.find(n => !n.isRead);
       
-      // Only trigger if it's a new ID we haven't shown yet
-      if (unread && (!currentNotif || unread._id !== currentNotif._id)) {
+      const unread = res.data.data.find(
+        n => !n.isRead && !displayedNotifIds.current.has(n._id)
+      );
+      
+      if (unread) {
+        displayedNotifIds.current.add(unread._id);
         triggerPopup(unread);
       }
     } catch (err) {
@@ -40,7 +55,6 @@ export const NotificationProvider = ({ children }) => {
   };
 
   const triggerPopup = (notif) => {
-    // 1. Clear any existing timer so the popup doesn't disappear early
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
     }
@@ -48,25 +62,21 @@ export const NotificationProvider = ({ children }) => {
     setCurrentNotif(notif);
     setVisible(true);
     
-    // 2. Reset Animation Positions for a clean start
     translateY.setValue(-100);
     translateX.setValue(0);
     opacity.setValue(0);
 
-    // 3. Slide Down Animation
     Animated.parallel([
       Animated.spring(translateY, { toValue: 60, useNativeDriver: true, bounciness: 8 }),
       Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true })
     ]).start();
 
-    // 4. Set a new timer to hide after 4 seconds
     hideTimerRef.current = setTimeout(() => {
       hidePopup();
     }, 4000);
   };
 
   const hidePopup = (toRight = true) => {
-    // Clear timer when manual hide (swipe) happens
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
     }
@@ -79,7 +89,6 @@ export const NotificationProvider = ({ children }) => {
       useNativeDriver: true
     }).start(() => {
       setVisible(false);
-      // Reset values for next time
       translateX.setValue(0);
       translateY.setValue(-200);
       opacity.setValue(0);
@@ -87,7 +96,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // --- SWIPE LOGIC ---
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: () => true,
@@ -105,7 +113,8 @@ export const NotificationProvider = ({ children }) => {
   ).current;
 
   return (
-    <NotificationContext.Provider value={{ triggerPopup }}>
+    // 🟢 Exposing startNotificationService along with triggerPopup
+    <NotificationContext.Provider value={{ triggerPopup, startNotificationService }}>
       {children}
       {visible && currentNotif && (
         <Animated.View

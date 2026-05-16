@@ -8,9 +8,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/api';
+import { useNotifications } from '../../context/NotificationContext';
 
 const { width } = Dimensions.get('window');
-const SLIDE_WIDTH = width - 40; // Total width minus horizontal margins
+const SLIDE_WIDTH = width - 40;
 const K_GREEN = '#6aaa49';
 const K_DARK_BLUE = '#112244';
 const LOGO_WREATH = require('../../assets/App-logo-only-no-bg.png');
@@ -24,6 +25,7 @@ export default function FarmerHome({ navigation, route }) {
   const [pos1Sliders, setPos1Sliders] = useState([]);
   const [pos2Sliders, setPos2Sliders] = useState([]);
   const [ongoingOrders, setOngoingOrders] = useState([]);
+  const { startNotificationService } = useNotifications();
   
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -79,7 +81,10 @@ export default function FarmerHome({ navigation, route }) {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+    fetchData(); 
+    startNotificationService();
+  }, []);
 
   // AUTO SLIDE POS1 Logic (Smoothly timed)
   useEffect(() => {
@@ -87,7 +92,7 @@ export default function FarmerHome({ navigation, route }) {
     const interval = setInterval(() => {
       const nextIndex = (currentPos1Idx + 1) % pos1Sliders.length;
       pos1Ref.current?.scrollToOffset({
-        offset: nextIndex * SLIDE_WIDTH,
+        offset: (nextIndex * SLIDE_WIDTH),
         animated: true,
       });
       setCurrentPos1Idx(nextIndex);
